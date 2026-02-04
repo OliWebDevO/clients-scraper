@@ -1,0 +1,115 @@
+"use client";
+
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Search, X, Calendar, Tag } from "lucide-react";
+import { JOB_PLATFORMS } from "@/lib/types";
+
+interface JobFilterPanelProps {
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
+  filters: {
+    source?: string;
+    keyword?: string;
+    dateRange?: string;
+  };
+  onFilterChange: (key: string, value: string) => void;
+  onClearFilters: () => void;
+  keywords: string[];
+}
+
+export function JobFilterPanel({
+  searchTerm,
+  onSearchChange,
+  filters,
+  onFilterChange,
+  onClearFilters,
+  keywords,
+}: JobFilterPanelProps) {
+  const hasActiveFilters =
+    searchTerm || filters.source || filters.keyword || filters.dateRange;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search jobs..."
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      <Select
+        value={filters.source || ""}
+        onValueChange={(v) => onFilterChange("source", v)}
+      >
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Source" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All sources</SelectItem>
+          {JOB_PLATFORMS.map((platform) => (
+            <SelectItem key={platform.id} value={platform.id}>
+              {platform.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={filters.keyword || ""}
+        onValueChange={(v) => onFilterChange("keyword", v)}
+      >
+        <SelectTrigger className="w-[180px]">
+          <Tag className="mr-2 h-4 w-4 text-muted-foreground" />
+          <SelectValue placeholder="Keyword" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All keywords</SelectItem>
+          {keywords.map((kw) => (
+            <SelectItem key={kw} value={kw}>
+              {kw}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={filters.dateRange || ""}
+        onValueChange={(v) => onFilterChange("dateRange", v)}
+      >
+        <SelectTrigger className="w-[140px]">
+          <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+          <SelectValue placeholder="Date" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Any time</SelectItem>
+          <SelectItem value="1">Last 24h</SelectItem>
+          <SelectItem value="7">Last 7 days</SelectItem>
+          <SelectItem value="30">Last 30 days</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {hasActiveFilters && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearFilters}
+          className="gap-1"
+        >
+          <X className="h-4 w-4" />
+          Clear
+        </Button>
+      )}
+    </div>
+  );
+}
