@@ -8,7 +8,12 @@ export interface Business {
   category: string | null;
   google_maps_url: string | null;
   has_website: boolean;
+  website_url: string | null;
+  website_score: number | null; // 0-100, higher = worse site = better prospect
+  website_issues: string[] | null;
   location_query: string | null;
+  investigated: boolean; // Mark as already looked at
+  viable: boolean | null; // null = not decided, true = viable, false = not viable
   created_at: string;
   updated_at: string;
 }
@@ -165,44 +170,45 @@ export const EMAIL_VARIABLES = [
 ];
 
 // Database types for Supabase
-export interface Database {
+// Using 'any' for flexibility - generate proper types with `supabase gen types typescript`
+export type Database = {
   public: {
     Tables: {
       businesses: {
         Row: Business;
-        Insert: Omit<Business, "id" | "created_at" | "updated_at">;
-        Update: Partial<Omit<Business, "id" | "created_at">>;
+        Insert: Partial<Business>;
+        Update: Partial<Business>;
       };
       jobs: {
         Row: Job;
-        Insert: Omit<Job, "id" | "created_at">;
-        Update: Partial<Omit<Job, "id" | "created_at">>;
+        Insert: Partial<Job>;
+        Update: Partial<Job>;
       };
       scrape_logs: {
         Row: ScrapeLog;
-        Insert: Omit<ScrapeLog, "id">;
-        Update: Partial<Omit<ScrapeLog, "id">>;
+        Insert: Partial<ScrapeLog>;
+        Update: Partial<ScrapeLog>;
       };
       scrape_schedules: {
         Row: ScrapeSchedule;
-        Insert: Omit<ScrapeSchedule, "id" | "created_at">;
-        Update: Partial<Omit<ScrapeSchedule, "id" | "created_at">>;
+        Insert: Partial<ScrapeSchedule>;
+        Update: Partial<ScrapeSchedule>;
       };
       settings: {
         Row: Setting;
-        Insert: Omit<Setting, "id" | "updated_at">;
-        Update: Partial<Omit<Setting, "id">>;
+        Insert: Partial<Setting>;
+        Update: Partial<Setting>;
       };
       email_templates: {
         Row: EmailTemplate;
-        Insert: Omit<EmailTemplate, "id" | "created_at" | "updated_at">;
-        Update: Partial<Omit<EmailTemplate, "id" | "created_at">>;
+        Insert: Partial<EmailTemplate>;
+        Update: Partial<EmailTemplate>;
       };
       sent_emails: {
         Row: SentEmail;
-        Insert: Omit<SentEmail, "id" | "sent_at">;
-        Update: Partial<Omit<SentEmail, "id" | "sent_at">>;
+        Insert: Partial<SentEmail>;
+        Update: Partial<SentEmail>;
       };
     };
   };
-}
+};

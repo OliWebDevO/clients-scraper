@@ -124,6 +124,9 @@ export async function GET(request: NextRequest) {
                 category: business.category || null,
                 google_maps_url: business.google_maps_url || null,
                 has_website: business.has_website || false,
+                website_url: business.website_url || null,
+                website_score: business.website_score || null,
+                website_issues: business.website_issues || null,
                 location_query: business.location_query,
               },
               { onConflict: "name,address" }

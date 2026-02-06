@@ -64,7 +64,8 @@ export abstract class BaseScraper {
     return `${this.baseUrl}/${url}`;
   }
 
-  protected extractText(element: cheerio.Cheerio<cheerio.Element> | undefined): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected extractText(element: cheerio.Cheerio<any> | undefined): string | null {
     if (!element) return null;
     const text = element.text().trim();
     return text || null;

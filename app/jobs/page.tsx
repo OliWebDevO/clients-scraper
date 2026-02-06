@@ -170,28 +170,26 @@ export default function JobsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Jobs</h1>
-          <p className="mt-1 text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Jobs</h1>
+          <p className="mt-1 text-sm sm:text-base text-muted-foreground">
             {filteredJobs.length} job opportunities found
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={fetchJobs} disabled={loading}>
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
-            />
-            Refresh
+        <div className="flex flex-wrap gap-2 sm:gap-3">
+          <Button variant="outline" size="sm" onClick={fetchJobs} disabled={loading} className="flex-1 sm:flex-none">
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <span className="hidden xs:inline">Refresh</span>
           </Button>
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={handleExport} className="flex-1 sm:flex-none">
             <Download className="mr-2 h-4 w-4" />
-            Export
+            <span className="hidden xs:inline">Export</span>
             {selectedIds.length > 0 && ` (${selectedIds.length})`}
           </Button>
-          <Button onClick={() => setScrapeModalOpen(true)}>
+          <Button size="sm" onClick={() => setScrapeModalOpen(true)} className="w-full sm:w-auto">
             <Play className="mr-2 h-4 w-4" />
             Scrape Jobs
           </Button>

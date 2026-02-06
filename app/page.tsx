@@ -101,26 +101,26 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm sm:text-base text-muted-foreground">
             Overview of your scraping activities
           </p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/clients">
-            <Button variant="outline" className="gap-2">
+        <div className="flex gap-2 sm:gap-3">
+          <Link href="/clients" className="flex-1 sm:flex-none">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto gap-2">
               <Play className="h-4 w-4" />
-              Scrape Clients
+              <span className="hidden xs:inline">Scrape</span> Clients
             </Button>
           </Link>
-          <Link href="/jobs">
-            <Button className="gap-2">
+          <Link href="/jobs" className="flex-1 sm:flex-none">
+            <Button size="sm" className="w-full sm:w-auto gap-2">
               <Play className="h-4 w-4" />
-              Scrape Jobs
+              <span className="hidden xs:inline">Scrape</span> Jobs
             </Button>
           </Link>
         </div>
@@ -155,7 +155,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions & Recent Activity */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Quick Actions */}
         <Card>
           <CardHeader>

@@ -7,6 +7,7 @@ import { FilterPanel } from "@/components/FilterPanel";
 import {
   ScrapeBusinessModal,
   BusinessScrapeConfig,
+  ProgressUpdate,
 } from "@/components/ScrapeBusinessModal";
 import { SendEmailModal } from "@/components/SendEmailModal";
 import { useToast } from "@/hooks/use-toast";
@@ -26,10 +27,13 @@ export default function ClientsPage() {
   );
   const [isScraping, setIsScraping] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [scrapeProgress, setScrapeProgress] = useState<ProgressUpdate | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
+    investigated: "",
+    viable: "not-red", // Default: hide non-viable
     minRating: "",
     category: "",
     hasWebsite: "",
@@ -68,9 +72,46 @@ export default function ClientsPage() {
     return Array.from(cats).sort();
   }, [businesses]);
 
-  // Filter businesses
+  // Filter and sort businesses
   const filteredBusinesses = useMemo(() => {
-    return businesses.filter((business) => {
+    // First filter
+    const filtered = businesses.filter((business) => {
+      // Hide businesses with good websites (score < 25)
+      if (business.has_website && business.website_score !== null && business.website_score < 25) {
+        return false;
+      }
+
+      // Investigated filter
+      if (filters.investigated && filters.investigated !== "all") {
+        const isInvestigated = filters.investigated === "yes";
+        if (business.investigated !== isInvestigated) {
+          return false;
+        }
+      }
+
+      // Viable filter
+      if (filters.viable) {
+        if (filters.viable === "not-red") {
+          // Hide non-viable (false), show viable (true) and not decided (null)
+          if (business.viable === false) {
+            return false;
+          }
+        } else if (filters.viable === "yes") {
+          if (business.viable !== true) {
+            return false;
+          }
+        } else if (filters.viable === "no") {
+          if (business.viable !== false) {
+            return false;
+          }
+        } else if (filters.viable === "na") {
+          if (business.viable !== null) {
+            return false;
+          }
+        }
+        // "all" shows everything
+      }
+
       // Search
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
@@ -108,45 +149,162 @@ export default function ClientsPage() {
 
       return true;
     });
+
+    // Then sort: no website first, then by score (worst to best), then unknown at end
+    return filtered.sort((a, b) => {
+      // No website first (best prospects)
+      if (!a.has_website && b.has_website) return -1;
+      if (a.has_website && !b.has_website) return 1;
+
+      // Both no website: sort by rating (higher first)
+      if (!a.has_website && !b.has_website) {
+        return (b.rating || 0) - (a.rating || 0);
+      }
+
+      // Both have website: sort by score (highest/worst first)
+      const aScore = a.website_score;
+      const bScore = b.website_score;
+
+      // Null scores (analysis failed) go to the end
+      if (aScore === null && bScore !== null) return 1;
+      if (aScore !== null && bScore === null) return -1;
+      if (aScore === null && bScore === null) return 0;
+
+      // Higher score = worse site = better prospect = comes first
+      return bScore! - aScore!;
+    });
   }, [businesses, searchTerm, filters]);
 
   const handleStartScrape = async (config: BusinessScrapeConfig) => {
     setIsScraping(true);
+    setScrapeProgress({ current: 0, total: 10, progress: 0, message: "Démarrage...", phase: "init" });
+
     try {
-      const response = await fetch("/api/scrape/businesses", {
+      const response = await fetch("/api/scrape/businesses/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        body: JSON.stringify({ ...config, maxResults: 10 }),
       });
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error("Erreur de connexion au serveur");
+      }
 
-      if (result.success) {
-        toast({
-          title: "Scrape Complete",
-          description: `Found ${result.items_found} businesses`,
-          variant: "success",
-        });
-        setScrapeModalOpen(false);
-        fetchBusinesses();
-      } else {
-        throw new Error(result.error || "Scrape failed");
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("Impossible de lire le stream");
+      }
+
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const chunk of lines) {
+          if (!chunk.trim()) continue;
+
+          const eventMatch = chunk.match(/event: (\w+)/);
+          const dataMatch = chunk.match(/data: (.+)/);
+
+          if (eventMatch && dataMatch) {
+            const eventType = eventMatch[1];
+            const data = JSON.parse(dataMatch[1]);
+
+            switch (eventType) {
+              case "progress":
+              case "status":
+                setScrapeProgress(data);
+                break;
+              case "complete":
+                toast({
+                  title: "Scrape terminé",
+                  description: data.message,
+                  variant: "success",
+                });
+                setScrapeModalOpen(false);
+                fetchBusinesses();
+                break;
+              case "error":
+                throw new Error(data.message);
+            }
+          }
+        }
       }
     } catch (error) {
       toast({
-        title: "Error",
+        title: "Erreur",
         description:
-          error instanceof Error ? error.message : "Failed to start scrape",
+          error instanceof Error ? error.message : "Échec du scraping",
         variant: "destructive",
       });
     } finally {
       setIsScraping(false);
+      setScrapeProgress(null);
     }
   };
 
   const handleSendEmail = (business: Business) => {
     setSelectedBusiness(business);
     setEmailModalOpen(true);
+  };
+
+  const handleToggleInvestigated = async (business: Business) => {
+    const newValue = !business.investigated;
+
+    // Optimistic update
+    setBusinesses(prev =>
+      prev.map(b => b.id === business.id ? { ...b, investigated: newValue } : b)
+    );
+
+    const { error } = await supabase
+      .from("businesses")
+      .update({ investigated: newValue })
+      .eq("id", business.id);
+
+    if (error) {
+      // Revert on error
+      setBusinesses(prev =>
+        prev.map(b => b.id === business.id ? { ...b, investigated: !newValue } : b)
+      );
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleViable = async (business: Business, value: boolean | null) => {
+    const oldValue = business.viable;
+
+    // Optimistic update
+    setBusinesses(prev =>
+      prev.map(b => b.id === business.id ? { ...b, viable: value } : b)
+    );
+
+    const { error } = await supabase
+      .from("businesses")
+      .update({ viable: value })
+      .eq("id", business.id);
+
+    if (error) {
+      // Revert on error
+      setBusinesses(prev =>
+        prev.map(b => b.id === business.id ? { ...b, viable: oldValue } : b)
+      );
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour le statut",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleEmailSend = async (data: {
@@ -216,38 +374,38 @@ export default function ClientsPage() {
 
   const handleClearFilters = () => {
     setSearchTerm("");
-    setFilters({ minRating: "", category: "", hasWebsite: "" });
+    setFilters({ investigated: "", viable: "not-red", minRating: "", category: "", hasWebsite: "" });
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-          <p className="mt-1 text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Clients</h1>
+          <p className="mt-1 text-sm sm:text-base text-muted-foreground">
             {filteredBusinesses.length} potential clients found
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={fetchBusinesses} disabled={loading}>
+        <div className="flex flex-wrap gap-2 sm:gap-3">
+          <Button variant="outline" size="sm" onClick={fetchBusinesses} disabled={loading} className="flex-1 sm:flex-none">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
+            <span className="hidden xs:inline">Refresh</span>
           </Button>
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={handleExport} className="flex-1 sm:flex-none">
             <Download className="mr-2 h-4 w-4" />
-            Export
+            <span className="hidden xs:inline">Export</span>
             {selectedIds.length > 0 && ` (${selectedIds.length})`}
           </Button>
           {selectedIds.length > 0 && (
-            <Button variant="outline">
+            <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
               <Mail className="mr-2 h-4 w-4" />
-              Email Selected ({selectedIds.length})
+              <span className="hidden sm:inline">Email</span> ({selectedIds.length})
             </Button>
           )}
-          <Button onClick={() => setScrapeModalOpen(true)}>
+          <Button size="sm" onClick={() => setScrapeModalOpen(true)} className="w-full sm:w-auto">
             <Play className="mr-2 h-4 w-4" />
-            Scrape Businesses
+            Scrape
           </Button>
         </div>
       </div>
@@ -275,6 +433,8 @@ export default function ClientsPage() {
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           onSendEmail={handleSendEmail}
+          onToggleInvestigated={handleToggleInvestigated}
+          onToggleViable={handleToggleViable}
         />
       )}
 
@@ -284,6 +444,7 @@ export default function ClientsPage() {
         onOpenChange={setScrapeModalOpen}
         onStartScrape={handleStartScrape}
         isLoading={isScraping}
+        progressData={scrapeProgress}
       />
 
       <SendEmailModal

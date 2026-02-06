@@ -111,6 +111,7 @@ export function ScrapeJobsModal({
                 >
                   <Checkbox
                     checked={selectedPlatforms.includes(platform.id)}
+                    onClick={(e) => e.stopPropagation()}
                     onCheckedChange={() => togglePlatform(platform.id)}
                   />
                   <div>

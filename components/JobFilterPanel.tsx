@@ -37,8 +37,9 @@ export function JobFilterPanel({
     searchTerm || filters.source || filters.keyword || filters.dateRange;
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="relative flex-1 min-w-[200px] max-w-sm">
+    <div className="space-y-3">
+      {/* Search - full width on mobile */}
+      <div className="relative w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search jobs..."
@@ -48,68 +49,71 @@ export function JobFilterPanel({
         />
       </div>
 
-      <Select
-        value={filters.source || ""}
-        onValueChange={(v) => onFilterChange("source", v)}
-      >
-        <SelectTrigger className="w-[140px]">
-          <SelectValue placeholder="Source" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All sources</SelectItem>
-          {JOB_PLATFORMS.map((platform) => (
-            <SelectItem key={platform.id} value={platform.id}>
-              {platform.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={filters.keyword || ""}
-        onValueChange={(v) => onFilterChange("keyword", v)}
-      >
-        <SelectTrigger className="w-[180px]">
-          <Tag className="mr-2 h-4 w-4 text-muted-foreground" />
-          <SelectValue placeholder="Keyword" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All keywords</SelectItem>
-          {keywords.map((kw) => (
-            <SelectItem key={kw} value={kw}>
-              {kw}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={filters.dateRange || ""}
-        onValueChange={(v) => onFilterChange("dateRange", v)}
-      >
-        <SelectTrigger className="w-[140px]">
-          <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-          <SelectValue placeholder="Date" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Any time</SelectItem>
-          <SelectItem value="1">Last 24h</SelectItem>
-          <SelectItem value="7">Last 7 days</SelectItem>
-          <SelectItem value="30">Last 30 days</SelectItem>
-        </SelectContent>
-      </Select>
-
-      {hasActiveFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="gap-1"
+      {/* Filters - scrollable on mobile */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 sm:flex-wrap">
+        <Select
+          value={filters.source || ""}
+          onValueChange={(v) => onFilterChange("source", v)}
         >
-          <X className="h-4 w-4" />
-          Clear
-        </Button>
-      )}
+          <SelectTrigger className="w-[120px] sm:w-[140px] shrink-0">
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            {JOB_PLATFORMS.map((platform) => (
+              <SelectItem key={platform.id} value={platform.id}>
+                {platform.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.keyword || ""}
+          onValueChange={(v) => onFilterChange("keyword", v)}
+        >
+          <SelectTrigger className="w-[140px] sm:w-[180px] shrink-0">
+            <Tag className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Keyword" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All keywords</SelectItem>
+            {keywords.map((kw) => (
+              <SelectItem key={kw} value={kw}>
+                {kw}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.dateRange || ""}
+          onValueChange={(v) => onFilterChange("dateRange", v)}
+        >
+          <SelectTrigger className="w-[120px] sm:w-[140px] shrink-0">
+            <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Date" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any time</SelectItem>
+            <SelectItem value="1">Last 24h</SelectItem>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearFilters}
+            className="gap-1 shrink-0"
+          >
+            <X className="h-4 w-4" />
+            <span className="hidden sm:inline">Clear</span>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

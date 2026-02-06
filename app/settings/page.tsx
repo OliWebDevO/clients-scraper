@@ -121,8 +121,8 @@ export default function SettingsPage() {
     if (next <= now) {
       if (schedule.frequency === "daily") {
         next.setDate(next.getDate() + 1);
-      } else if (schedule.frequency === "weekly" && schedule.day_of_week !== null) {
-        next.setDate(next.getDate() + ((7 + schedule.day_of_week - now.getDay()) % 7 || 7));
+      } else if (schedule.frequency === "weekly" && schedule.day_of_week != null) {
+        next.setDate(next.getDate() + ((7 + (schedule.day_of_week ?? 0) - now.getDay()) % 7 || 7));
       }
     }
 
