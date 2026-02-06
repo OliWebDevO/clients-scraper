@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   source TEXT NOT NULL,
   keywords_matched TEXT[],
   posted_at TIMESTAMPTZ,
+  investigated BOOLEAN DEFAULT false,
+  viable BOOLEAN DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -92,6 +94,32 @@ CREATE TABLE IF NOT EXISTS sent_emails (
   sent_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- User documents (CV, cover letter)
+CREATE TABLE IF NOT EXISTS user_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT NOT NULL, -- 'cv' or 'cover_letter'
+  filename TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_size INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Job drafts (AI-generated cover letters)
+CREATE TABLE IF NOT EXISTS job_drafts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+  storage_path TEXT,
+  filename TEXT,
+  file_size INTEGER,
+  job_description_text TEXT, -- cached scraped description
+  ai_model TEXT,
+  status TEXT DEFAULT 'pending', -- 'pending', 'generating', 'completed', 'failed'
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_businesses_location ON businesses(location_query);
 CREATE INDEX IF NOT EXISTS idx_businesses_rating ON businesses(rating);
@@ -102,6 +130,8 @@ CREATE INDEX IF NOT EXISTS idx_scrape_logs_type ON scrape_logs(type);
 CREATE INDEX IF NOT EXISTS idx_scrape_schedules_enabled ON scrape_schedules(enabled);
 CREATE INDEX IF NOT EXISTS idx_scrape_schedules_next_run ON scrape_schedules(next_run_at);
 CREATE INDEX IF NOT EXISTS idx_sent_emails_business ON sent_emails(business_id);
+CREATE INDEX IF NOT EXISTS idx_job_drafts_job_id ON job_drafts(job_id);
+CREATE INDEX IF NOT EXISTS idx_job_drafts_status ON job_drafts(status);
 
 -- Enable Row Level Security (optional, for production)
 -- ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;

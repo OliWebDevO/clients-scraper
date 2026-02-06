@@ -151,14 +151,15 @@ export default function ClientsPage() {
     });
 
     // Then sort: no website first, then by score (worst to best), then unknown at end
+    // Within each group, sort by review_count (most reviews first)
     return filtered.sort((a, b) => {
       // No website first (best prospects)
       if (!a.has_website && b.has_website) return -1;
       if (a.has_website && !b.has_website) return 1;
 
-      // Both no website: sort by rating (higher first)
+      // Both no website: sort by review count (most first)
       if (!a.has_website && !b.has_website) {
-        return (b.rating || 0) - (a.rating || 0);
+        return (b.review_count || 0) - (a.review_count || 0);
       }
 
       // Both have website: sort by score (highest/worst first)
@@ -168,10 +169,17 @@ export default function ClientsPage() {
       // Null scores (analysis failed) go to the end
       if (aScore === null && bScore !== null) return 1;
       if (aScore !== null && bScore === null) return -1;
-      if (aScore === null && bScore === null) return 0;
+      if (aScore === null && bScore === null) {
+        return (b.review_count || 0) - (a.review_count || 0);
+      }
 
-      // Higher score = worse site = better prospect = comes first
-      return bScore! - aScore!;
+      // Different score groups: higher score = worse site = better prospect = comes first
+      if (aScore! !== bScore!) {
+        return bScore! - aScore!;
+      }
+
+      // Same score group: sort by review count (most first)
+      return (b.review_count || 0) - (a.review_count || 0);
     });
   }, [businesses, searchTerm, filters]);
 
@@ -183,7 +191,7 @@ export default function ClientsPage() {
       const response = await fetch("/api/scrape/businesses/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...config, maxResults: 10 }),
+        body: JSON.stringify(config),
       });
 
       if (!response.ok) {
@@ -224,7 +232,7 @@ export default function ClientsPage() {
                 break;
               case "complete":
                 toast({
-                  title: "Scrape terminé",
+                  title: "Recherche terminée",
                   description: data.message,
                   variant: "success",
                 });
@@ -241,7 +249,7 @@ export default function ClientsPage() {
       toast({
         title: "Erreur",
         description:
-          error instanceof Error ? error.message : "Échec du scraping",
+          error instanceof Error ? error.message : "Échec de la recherche",
         variant: "destructive",
       });
     } finally {
@@ -405,7 +413,7 @@ export default function ClientsPage() {
           )}
           <Button size="sm" onClick={() => setScrapeModalOpen(true)} className="w-full sm:w-auto">
             <Play className="mr-2 h-4 w-4" />
-            Scrape
+            Find Clients
           </Button>
         </div>
       </div>

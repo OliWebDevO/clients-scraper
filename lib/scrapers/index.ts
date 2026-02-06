@@ -5,9 +5,13 @@ import { ActirisScraper } from "./actiris";
 import { JobsoraScraper } from "./jobsora";
 import { LinkedInScraper } from "./linkedin";
 import type { JobPlatform } from "@/lib/types";
-import type { BaseScraper } from "./base";
+import type { ScraperResult } from "./base";
 
-export function getScraperForPlatform(platform: JobPlatform): BaseScraper {
+interface Scraper {
+  scrape(keywords: string[], location?: string): Promise<ScraperResult>;
+}
+
+export function getScraperForPlatform(platform: JobPlatform): Scraper {
   switch (platform) {
     case "ictjob":
       return new ICTJobScraper();

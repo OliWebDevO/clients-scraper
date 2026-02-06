@@ -29,6 +29,8 @@ export interface Job {
   source: string;
   keywords_matched: string[];
   posted_at: string | null;
+  investigated: boolean;
+  viable: boolean | null;
   created_at: string;
 }
 
@@ -96,6 +98,38 @@ export interface SentEmail {
   status: "sent" | "delivered" | "opened" | "failed";
   resend_id: string | null;
   sent_at: string;
+}
+
+export interface UserDocument {
+  id: string;
+  type: "cv" | "cover_letter" | "proposal_template";
+  filename: string;
+  storage_path: string;
+  mime_type: string;
+  file_size: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobDraft {
+  id: string;
+  job_id: string;
+  storage_path: string;
+  filename: string;
+  file_size: number;
+  job_description_text: string | null;
+  ai_model: string;
+  status: "pending" | "generating" | "completed" | "failed";
+  error_message: string | null;
+  created_at: string;
+}
+
+export type DraftPhase = "init" | "fetching_job" | "reading_documents" | "generating" | "saving" | "done" | "error";
+
+export interface DraftProgressUpdate {
+  progress: number;
+  message: string;
+  phase: DraftPhase;
 }
 
 // API response types
@@ -208,6 +242,16 @@ export type Database = {
         Row: SentEmail;
         Insert: Partial<SentEmail>;
         Update: Partial<SentEmail>;
+      };
+      user_documents: {
+        Row: UserDocument;
+        Insert: Partial<UserDocument>;
+        Update: Partial<UserDocument>;
+      };
+      job_drafts: {
+        Row: JobDraft;
+        Insert: Partial<JobDraft>;
+        Update: Partial<JobDraft>;
       };
     };
   };

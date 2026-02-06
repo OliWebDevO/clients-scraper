@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
+import { expandKeywords } from "@/lib/scrapers/base";
 import type { JobPlatform, Job } from "@/lib/types";
 
 export const maxDuration = 300; // 5 minutes max for Vercel
@@ -14,7 +15,8 @@ interface ScrapeJobsRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: ScrapeJobsRequest = await request.json();
-    const { platforms, keywords, location } = body;
+    const { platforms, location } = body;
+    const keywords = expandKeywords(body.keywords);
 
     if (!platforms || platforms.length === 0) {
       return NextResponse.json(

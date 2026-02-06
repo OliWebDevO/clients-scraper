@@ -62,7 +62,7 @@ export function BusinessTable({
           No businesses found
         </p>
         <p className="mt-1 text-sm text-muted-foreground/70 text-center">
-          Start a scrape to find potential clients
+          Start a search to find potential clients
         </p>
       </div>
     );

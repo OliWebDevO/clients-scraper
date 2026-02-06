@@ -15,23 +15,38 @@ export class ICTJobScraper extends BaseScraper {
         const html = await this.fetchPage(searchUrl);
         const $ = this.parseHtml(html);
 
-        $(".job-listing, .search-item, li.clearfix").each((_, element) => {
+        // ICTJob uses .search-item.clearfix for each job listing
+        $(".search-item.clearfix").each((_, element) => {
           try {
             const $el = $(element);
-            const titleEl = $el.find("h2 a, .job-title a, a.job-title").first();
-            const title = this.extractText(titleEl);
+
+            // Skip non-job items (like "create job alert")
+            if ($el.hasClass("create-job-alert-search-item")) return;
+
+            // Title & URL via the link with class .search-item-link
+            const titleEl = $el.find("a.search-item-link").first();
+            const title = this.extractText(titleEl.find("h2.job-title")) ||
+                         this.extractText(titleEl);
             if (!title) return;
 
             const href = titleEl.attr("href");
             if (!href) return;
             const url = this.normalizeUrl(href);
 
-            const company = this.extractText($el.find(".job-company, .company"));
-            const jobLocation = this.extractText($el.find(".job-location, .location")) || location;
+            // Company
+            const company = this.extractText($el.find("span.job-company"));
+
+            // Location - nested in schema.org markup
+            const jobLocation = this.extractText($el.find("span.job-location span[itemprop='addressLocality']")) ||
+                               this.extractText($el.find("span.job-location")) ||
+                               location;
 
             if (jobs.some((j) => j.url === url)) return;
 
             const matchedKeywords = this.matchesKeyword(title, keywords);
+            if (matchedKeywords.length === 0) {
+              matchedKeywords.push(keyword);
+            }
 
             jobs.push({
               title,
@@ -39,10 +54,10 @@ export class ICTJobScraper extends BaseScraper {
               location: jobLocation,
               url,
               source: this.source,
-              keywords_matched: matchedKeywords.length > 0 ? matchedKeywords : [keyword],
+              keywords_matched: matchedKeywords,
             });
           } catch (err) {
-            console.error("Error parsing job listing:", err);
+            console.error("Error parsing ICTJob listing:", err);
           }
         });
       }

@@ -11,42 +11,41 @@ export class JobatScraper extends BaseScraper {
 
     try {
       for (const keyword of keywords) {
-        const searchUrl = this.buildSearchUrl(keyword, location);
+        const searchUrl = this.buildSearchUrl(keyword);
 
         try {
           const html = await this.fetchPage(searchUrl);
           const $ = this.parseHtml(html);
 
-          // Jobat job card selectors
-          const jobCards = $(".job-card, .search-result-item, article[data-job-id]");
-
-          jobCards.each((_, element) => {
+          // Jobat uses .jobResults-card for each job listing
+          $(".jobResults-card").each((_, element) => {
             try {
               const $el = $(element);
 
-              // Title
-              const titleEl = $el.find("h2 a, .job-title a, a.job-link").first();
+              // Title & URL
+              const titleEl = $el.find("h2.jobTitle a").first();
               const title = this.extractText(titleEl);
-
               if (!title) return;
 
-              // URL
-              const href = titleEl.attr("href");
+              const href = titleEl.attr("href") || $el.attr("data-id");
               if (!href) return;
               const url = this.normalizeUrl(href);
 
               // Company
-              const company = this.extractText($el.find(".company-name, .employer-name, [data-company]"));
+              const company = this.extractText($el.find(".jobCard-company a")) ||
+                             this.extractText($el.find(".jobCard-company"));
 
               // Location
-              const jobLocation = this.extractText($el.find(".location, .job-location, [data-location]")) ||
+              const jobLocation = this.extractText($el.find(".jobCard-location")) ||
                                  location;
 
               // Check for duplicates
               if (jobs.some((j) => j.url === url)) return;
 
-              // Match keywords
               const matchedKeywords = this.matchesKeyword(title, keywords);
+              if (matchedKeywords.length === 0) {
+                matchedKeywords.push(keyword);
+              }
 
               jobs.push({
                 title,
@@ -54,7 +53,7 @@ export class JobatScraper extends BaseScraper {
                 location: jobLocation,
                 url,
                 source: this.source,
-                keywords_matched: matchedKeywords.length > 0 ? matchedKeywords : [keyword],
+                keywords_matched: matchedKeywords,
               });
             } catch (err) {
               console.error("Error parsing Jobat job:", err);
@@ -74,12 +73,9 @@ export class JobatScraper extends BaseScraper {
     }
   }
 
-  private buildSearchUrl(keyword: string, location?: string): string {
-    const params = new URLSearchParams();
-    params.set("q", keyword);
-    if (location) {
-      params.set("location", location);
-    }
-    return `${this.baseUrl}/en/jobs?${params.toString()}`;
+  private buildSearchUrl(keyword: string): string {
+    // Jobat uses /en/jobs/results/{keyword-slug} URL pattern
+    const slug = keyword.replace(/\s+/g, "-").toLowerCase();
+    return `${this.baseUrl}/en/jobs/results/${slug}`;
   }
 }

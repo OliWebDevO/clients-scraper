@@ -52,7 +52,7 @@ export function Sidebar() {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Briefcase className="h-4 w-4" />
           </div>
-          <span className="text-lg font-semibold tracking-tight">Scraper</span>
+          <span className="text-lg font-semibold tracking-tight">Finder</span>
         </Link>
         <Button
           variant="ghost"
@@ -88,7 +88,7 @@ export function Sidebar() {
                 <Briefcase className="h-4 w-4" />
               </div>
               <span className="text-lg font-semibold tracking-tight">
-                Scraper
+                Finder
               </span>
             </Link>
           </div>
@@ -132,7 +132,7 @@ export function Sidebar() {
           <div className="border-t border-border p-4">
             <div className="rounded-md bg-muted p-3">
               <p className="text-xs text-muted-foreground">
-                Find clients & jobs faster with automated scraping.
+                Find clients & jobs faster with automated searching.
               </p>
             </div>
           </div>

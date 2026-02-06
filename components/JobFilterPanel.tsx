@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Search, X, Calendar, Tag } from "lucide-react";
+import { Search, X, Calendar, Tag, Eye, ThumbsUp } from "lucide-react";
 import { JOB_PLATFORMS } from "@/lib/types";
 
 interface JobFilterPanelProps {
@@ -19,6 +19,8 @@ interface JobFilterPanelProps {
     source?: string;
     keyword?: string;
     dateRange?: string;
+    investigated?: string;
+    viable?: string;
   };
   onFilterChange: (key: string, value: string) => void;
   onClearFilters: () => void;
@@ -34,7 +36,8 @@ export function JobFilterPanel({
   keywords,
 }: JobFilterPanelProps) {
   const hasActiveFilters =
-    searchTerm || filters.source || filters.keyword || filters.dateRange;
+    searchTerm || filters.source || filters.keyword || filters.dateRange ||
+    filters.investigated || (filters.viable && filters.viable !== "not-red");
 
   return (
     <div className="space-y-3">
@@ -51,6 +54,38 @@ export function JobFilterPanel({
 
       {/* Filters - scrollable on mobile */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 sm:flex-wrap">
+        <Select
+          value={filters.investigated || ""}
+          onValueChange={(v) => onFilterChange("investigated", v)}
+        >
+          <SelectTrigger className="w-[110px] sm:w-[130px] shrink-0">
+            <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Statut" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous</SelectItem>
+            <SelectItem value="no">Non vu</SelectItem>
+            <SelectItem value="yes">Vu</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.viable || "not-red"}
+          onValueChange={(v) => onFilterChange("viable", v)}
+        >
+          <SelectTrigger className="w-[130px] sm:w-[150px] shrink-0">
+            <ThumbsUp className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Viable" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="not-red">Viable / N/A</SelectItem>
+            <SelectItem value="all">Tous</SelectItem>
+            <SelectItem value="yes">Viable</SelectItem>
+            <SelectItem value="no">Non viable</SelectItem>
+            <SelectItem value="na">Non décidé</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select
           value={filters.source || ""}
           onValueChange={(v) => onFilterChange("source", v)}

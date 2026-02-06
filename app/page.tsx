@@ -91,7 +91,7 @@ export default function Dashboard() {
       color: "text-purple-400",
     },
     {
-      title: "Last Scrape",
+      title: "Last Search",
       value: stats.lastScrape ? formatRelativeTime(stats.lastScrape) : "Never",
       icon: Clock,
       href: "/settings",
@@ -107,20 +107,20 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-            Overview of your scraping activities
+            Overview of your finding activities
           </p>
         </div>
         <div className="flex gap-2 sm:gap-3">
           <Link href="/clients" className="flex-1 sm:flex-none">
             <Button variant="outline" size="sm" className="w-full sm:w-auto gap-2">
               <Play className="h-4 w-4" />
-              <span className="hidden xs:inline">Scrape</span> Clients
+              <span className="hidden xs:inline">Find</span> Clients
             </Button>
           </Link>
           <Link href="/jobs" className="flex-1 sm:flex-none">
             <Button size="sm" className="w-full sm:w-auto gap-2">
               <Play className="h-4 w-4" />
-              <span className="hidden xs:inline">Scrape</span> Jobs
+              <span className="hidden xs:inline">Find</span> Jobs
             </Button>
           </Link>
         </div>
@@ -174,7 +174,7 @@ export default function Dashboard() {
                   <div>
                     <p className="font-medium">Find New Clients</p>
                     <p className="text-sm text-muted-foreground">
-                      Scrape Google Maps for businesses
+                      Search Google Maps for businesses
                     </p>
                   </div>
                 </div>
@@ -236,7 +236,7 @@ export default function Dashboard() {
                 <Activity className="mb-2 h-8 w-8 text-muted-foreground/50" />
                 <p className="text-muted-foreground">No recent activity</p>
                 <p className="text-sm text-muted-foreground/70">
-                  Start a scrape to see activity here
+                  Start a search to see activity here
                 </p>
               </div>
             ) : (
@@ -244,17 +244,19 @@ export default function Dashboard() {
                 {recentLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="flex items-center justify-between rounded-md border border-border p-3"
+                    className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
                   >
-                    <div className="flex items-center gap-3">
-                      {log.type === "businesses" ? (
-                        <Users className="h-4 w-4 text-blue-400" />
-                      ) : (
-                        <Briefcase className="h-4 w-4 text-green-400" />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium capitalize">
-                          {log.type} Scrape
+                    <div className="flex items-center gap-3 min-w-0 w-1/2">
+                      <div className="shrink-0 self-start mt-0.5">
+                        {log.type === "businesses" ? (
+                          <Users className="h-4 w-4 text-blue-400" />
+                        ) : (
+                          <Briefcase className="h-4 w-4 text-green-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium capitalize break-words">
+                          {log.type} Search
                           {log.source && ` (${log.source})`}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -262,8 +264,8 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">
                         {log.items_found} found
                       </span>
                       <Badge

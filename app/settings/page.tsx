@@ -180,7 +180,7 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="mt-1 text-muted-foreground">
-            Manage scrape schedules and preferences
+            Manage search schedules and preferences
           </p>
         </div>
       </div>
@@ -192,10 +192,10 @@ export default function SettingsPage() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Scheduled Scrapes
+                Scheduled Searches
               </CardTitle>
               <CardDescription>
-                Set up automatic scraping at regular intervals
+                Set up automatic searching at regular intervals
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -218,7 +218,7 @@ export default function SettingsPage() {
               <Calendar className="mb-4 h-12 w-12 text-muted-foreground/30" />
               <p className="text-lg font-medium text-muted-foreground">No schedules yet</p>
               <p className="text-sm text-muted-foreground/70">
-                Create a schedule to automate your scraping
+                Create a schedule to automate your searching
               </p>
             </div>
           ) : (
@@ -282,7 +282,7 @@ export default function SettingsPage() {
               {currentSchedule && "id" in currentSchedule ? "Edit Schedule" : "Create Schedule"}
             </DialogTitle>
             <DialogDescription>
-              Configure when and what to scrape automatically
+              Configure when and what to search automatically
             </DialogDescription>
           </DialogHeader>
 

@@ -19,8 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, MapPin, Star, X, Plus } from "lucide-react";
+import { Loader2, MapPin, Star, Search, Hash } from "lucide-react";
 
 export interface ProgressUpdate {
   current: number;
@@ -44,6 +43,7 @@ export interface BusinessScrapeConfig {
   radius: number;
   minRating: number;
   categories: string[];
+  maxResults: number;
 }
 
 // Catégories suggérées pour les petits commerces
@@ -77,29 +77,28 @@ export function ScrapeBusinessModal({
   isLoading,
   progressData,
 }: ScrapeBusinessModalProps) {
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState("Brussels");
   const [radius, setRadius] = useState("10");
-  const [minRating, setMinRating] = useState("0");
+  const [minRating, setMinRating] = useState("3");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [customCategory, setCustomCategory] = useState("");
+  const [maxResults, setMaxResults] = useState("20");
 
   // Use real progress from progressData prop
   const progress = progressData?.progress || 0;
   const statusText = progressData?.message || "Démarrage...";
 
-  const addCategory = (cat: string) => {
-    if (cat && !selectedCategories.includes(cat)) {
-      setSelectedCategories([...selectedCategories, cat]);
-    }
-  };
-
-  const removeCategory = (cat: string) => {
-    setSelectedCategories(selectedCategories.filter((c) => c !== cat));
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(cat)
+        ? prev.filter((c) => c !== cat)
+        : [...prev, cat]
+    );
   };
 
   const addCustomCategory = () => {
-    if (customCategory.trim()) {
-      addCategory(customCategory.trim());
+    if (customCategory.trim() && !selectedCategories.includes(customCategory.trim())) {
+      setSelectedCategories([...selectedCategories, customCategory.trim()]);
       setCustomCategory("");
     }
   };
@@ -117,19 +116,20 @@ export function ScrapeBusinessModal({
       radius: parseInt(radius, 10),
       minRating: parseFloat(minRating),
       categories,
+      maxResults: parseInt(maxResults, 10) || 10,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={isLoading ? undefined : onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-3xl !max-h-[85vh] !overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Scrape Businesses
+            Find Clients
           </DialogTitle>
           <DialogDescription>
-            Find potential clients without websites or with outdated sites.
+            Sélectionnez les catégories et paramètres pour rechercher des clients potentiels.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,7 +156,7 @@ export function ScrapeBusinessModal({
             <div className="text-center space-y-2">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
               <p className="text-sm text-muted-foreground">
-                Recherche: <strong>{selectedCategories.join(", ") || "Commerces"}</strong> à <strong>{location}</strong>
+                Recherche: <strong>{selectedCategories.slice(0, 3).join(", ")}{selectedCategories.length > 3 ? "..." : ""}</strong> à <strong>{location}</strong>
               </p>
               {progressData?.businessName && (
                 <p className="text-xs text-primary font-medium">
@@ -169,100 +169,31 @@ export function ScrapeBusinessModal({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Location */}
-            <div className="space-y-2">
-              <Label htmlFor="location" className="flex items-center gap-2 text-sm">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                Location
-              </Label>
-              <Input
-                id="location"
-                placeholder="e.g., Brussels, Belgium"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                required
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          {/* Two-column layout: settings left, categories right */}
+          <div className="grid grid-cols-1 sm:grid-cols-[2fr_3fr] gap-5 min-h-0 flex-1 pr-1">
 
-            {/* Categories */}
-            <div className="space-y-2">
-              <Label className="text-sm">What are you looking for?</Label>
-
-              {/* Selected categories */}
-              {selectedCategories.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 p-2 bg-muted/50 rounded-md">
-                  {selectedCategories.map((cat) => (
-                    <Badge key={cat} variant="secondary" className="gap-1 text-xs">
-                      {cat}
-                      <button type="button" onClick={() => removeCategory(cat)}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {/* Custom input */}
-              <div className="flex gap-2">
+            {/* Left: Settings */}
+            <div className="flex flex-col gap-3">
+              <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/20">
+                <Label htmlFor="location" className="flex items-center gap-2 text-sm font-semibold">
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                  Localisation
+                </Label>
                 <Input
-                  placeholder="Add custom search term..."
-                  value={customCategory}
-                  onChange={(e) => setCustomCategory(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addCustomCategory();
-                    }
-                  }}
-                  className="text-sm"
+                  id="location"
+                  placeholder="ex: Brussels, Belgium"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  required
+                  className="h-9"
                 />
-                <Button type="button" size="sm" variant="outline" onClick={addCustomCategory}>
-                  <Plus className="h-4 w-4" />
-                </Button>
               </div>
 
-              {/* Suggested categories */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Suggestions:</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs px-2"
-                    onClick={() => {
-                      if (selectedCategories.length === SUGGESTED_CATEGORIES.length) {
-                        setSelectedCategories([]);
-                      } else {
-                        setSelectedCategories([...SUGGESTED_CATEGORIES]);
-                      }
-                    }}
-                  >
-                    {selectedCategories.length === SUGGESTED_CATEGORIES.length ? "Tout désélectionner" : "Tout sélectionner"}
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                  {SUGGESTED_CATEGORIES.filter(cat => !selectedCategories.includes(cat)).map((cat) => (
-                    <Badge
-                      key={cat}
-                      variant="outline"
-                      className="cursor-pointer text-xs hover:bg-primary hover:text-primary-foreground transition-colors"
-                      onClick={() => addCategory(cat)}
-                    >
-                      + {cat}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Radius and Rating */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="radius" className="text-sm">Radius (km)</Label>
+              <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/20">
+                <Label htmlFor="radius" className="text-sm font-semibold">Rayon</Label>
                 <Select value={radius} onValueChange={setRadius}>
-                  <SelectTrigger id="radius">
+                  <SelectTrigger id="radius" className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,17 +205,17 @@ export function ScrapeBusinessModal({
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="minRating" className="flex items-center gap-2 text-sm">
-                  <Star className="h-4 w-4 text-muted-foreground" />
-                  Min Rating
+              <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/20">
+                <Label htmlFor="minRating" className="flex items-center gap-2 text-sm font-semibold">
+                  <Star className="h-3.5 w-3.5 text-muted-foreground" />
+                  Note minimum
                 </Label>
                 <Select value={minRating} onValueChange={setMinRating}>
-                  <SelectTrigger id="minRating">
+                  <SelectTrigger id="minRating" className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Any rating</SelectItem>
+                    <SelectItem value="0">Toutes</SelectItem>
                     <SelectItem value="3">3+ stars</SelectItem>
                     <SelectItem value="3.5">3.5+ stars</SelectItem>
                     <SelectItem value="4">4+ stars</SelectItem>
@@ -292,23 +223,116 @@ export function ScrapeBusinessModal({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/20">
+                <Label htmlFor="maxResults" className="flex items-center gap-2 text-sm font-semibold">
+                  <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                  Limite de résultats
+                </Label>
+                <Select value={maxResults} onValueChange={setMaxResults}>
+                  <SelectTrigger id="maxResults" className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 clients</SelectItem>
+                    <SelectItem value="20">20 clients</SelectItem>
+                    <SelectItem value="50">50 clients</SelectItem>
+                    <SelectItem value="100">100 clients</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenChange(false)}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={!location} className="w-full sm:w-auto">
-                Start Scrape
-              </Button>
-            </DialogFooter>
-          </form>
+            {/* Right: Categories as chips + custom input */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">
+                  Catégories
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {selectedCategories.length} sélectionnée{selectedCategories.length > 1 ? "s" : ""}
+                  </span>
+                </Label>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (selectedCategories.length === SUGGESTED_CATEGORIES.length) {
+                      setSelectedCategories([]);
+                    } else {
+                      setSelectedCategories([...SUGGESTED_CATEGORIES]);
+                    }
+                  }}
+                >
+                  {selectedCategories.length === SUGGESTED_CATEGORIES.length ? "Aucun" : "Tout sélectionner"}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTED_CATEGORIES.map((cat) => (
+                  <div
+                    key={cat}
+                    className={`px-3.5 py-1.5 rounded-full text-sm cursor-pointer transition-all select-none ${
+                      selectedCategories.includes(cat)
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                    }`}
+                    onClick={() => toggleCategory(cat)}
+                  >
+                    {cat}
+                  </div>
+                ))}
+              </div>
+
+              {/* Custom category input */}
+              <div className="flex gap-2 mt-auto pt-2">
+                <Input
+                  placeholder="Ajouter une catégorie personnalisée..."
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomCategory();
+                    }
+                  }}
+                  className="h-9"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addCustomCategory}
+                  className="shrink-0 h-9 px-4"
+                >
+                  Ajouter
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer - always visible */}
+          <DialogFooter className="shrink-0 pt-4 border-t border-border mt-4 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              disabled={isLoading || !location}
+              className="min-w-[180px]"
+            >
+              <Search className="mr-2 h-4 w-4" />
+              Lancer la recherche
+              {selectedCategories.length > 0 && (
+                <span className="ml-1.5 bg-primary-foreground/20 px-1.5 py-0.5 rounded text-xs">
+                  {selectedCategories.length}
+                </span>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
         )}
       </DialogContent>
     </Dialog>

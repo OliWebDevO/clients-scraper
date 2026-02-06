@@ -8,6 +8,10 @@ import {
   MapPin,
   Briefcase,
   DollarSign,
+  Check,
+  X,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +23,10 @@ interface JobTableProps {
   jobs: Job[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
+  onToggleInvestigated: (job: Job) => void;
+  onToggleViable: (job: Job, value: boolean | null) => void;
+  onDraft?: (job: Job) => void;
+  draftStatuses?: Record<string, "none" | "generating" | "done">;
 }
 
 const platformColors: Record<string, string> = {
@@ -34,6 +42,10 @@ export function JobTable({
   jobs,
   selectedIds,
   onSelectionChange,
+  onToggleInvestigated,
+  onToggleViable,
+  onDraft,
+  draftStatuses = {},
 }: JobTableProps) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
@@ -61,7 +73,7 @@ export function JobTable({
           No jobs found
         </p>
         <p className="mt-1 text-sm text-muted-foreground/70 text-center">
-          Start a scrape to find job opportunities
+          Start a search to find job opportunities
         </p>
       </div>
     );
@@ -88,7 +100,7 @@ export function JobTable({
             key={job.id}
             className={`rounded-lg border border-border p-4 space-y-3 ${
               selectedIds.includes(job.id) ? "bg-primary/5 border-primary/30" : ""
-            }`}
+            } ${job.investigated ? "opacity-50" : ""}`}
           >
             {/* Header: Checkbox + Title */}
             <div className="flex items-start gap-3">
@@ -100,10 +112,15 @@ export function JobTable({
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium line-clamp-2">{job.title}</h3>
                 {job.company && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                  <a
+                    href={`https://www.google.com/search?q=${encodeURIComponent(job.company)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground flex items-center gap-1 mt-1 hover:text-foreground transition-colors"
+                  >
                     <Building2 className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{job.company}</span>
-                  </p>
+                    <span className="truncate underline decoration-muted-foreground/30 hover:decoration-foreground">{job.company}</span>
+                  </a>
                 )}
               </div>
             </div>
@@ -150,10 +167,63 @@ export function JobTable({
               ))}
             </div>
 
-            {/* Action */}
-            <div className="pt-2 border-t border-border">
-              <a href={job.url} target="_blank" rel="noopener noreferrer" className="block">
-                <Button variant="outline" size="sm" className="w-full">
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-2 border-t border-border overflow-hidden">
+              {/* Vu checkbox */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => onToggleInvestigated(job)}
+                  className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    job.investigated
+                      ? "bg-green-500 border-green-500 text-white"
+                      : "border-muted-foreground/30 hover:border-green-500"
+                  }`}
+                  title={job.investigated ? "Marquer non vu" : "Marquer vu"}
+                >
+                  {job.investigated && <Check className="h-3 w-3" />}
+                </button>
+                <span className="text-xs text-muted-foreground">Vu</span>
+              </div>
+              {/* Viable checkbox */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    const nextValue = job.viable === null ? true : job.viable === true ? false : null;
+                    onToggleViable(job, nextValue);
+                  }}
+                  className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    job.viable === true
+                      ? "bg-green-500 border-green-500 text-white"
+                      : job.viable === false
+                      ? "bg-red-500 border-red-500 text-white"
+                      : "border-muted-foreground/30 hover:border-muted-foreground"
+                  }`}
+                  title={job.viable === true ? "Viable" : job.viable === false ? "Non viable" : "Non décidé"}
+                >
+                  {job.viable === true && <Check className="h-3 w-3" />}
+                  {job.viable === false && <X className="h-3 w-3" />}
+                </button>
+                <span className="text-xs text-muted-foreground">Viable</span>
+              </div>
+              <div className="flex-1" />
+              {onDraft && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDraft(job)}
+                  disabled={draftStatuses[job.id] === "generating"}
+                  className="shrink-0"
+                >
+                  {draftStatuses[job.id] === "generating" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className={`mr-2 h-4 w-4 ${draftStatuses[job.id] === "done" ? "text-blue-500" : ""}`} />
+                  )}
+                  Draft
+                </Button>
+              )}
+              <a href={job.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                <Button variant="outline" size="sm">
                   <ExternalLink className="mr-2 h-4 w-4" />
                   View Job
                 </Button>
@@ -193,6 +263,15 @@ export function JobTable({
                 <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
                   Posted
                 </th>
+                <th className="w-12 px-2 py-3 text-center text-sm font-medium text-muted-foreground">
+                  Vu
+                </th>
+                <th className="w-12 px-2 py-3 text-center text-sm font-medium text-muted-foreground">
+                  Viable
+                </th>
+                <th className="w-12 px-2 py-3 text-center text-sm font-medium text-muted-foreground">
+                  Draft
+                </th>
                 <th className="w-16 px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Link
                 </th>
@@ -204,7 +283,7 @@ export function JobTable({
                   key={job.id}
                   className={`border-b border-border transition-colors duration-150 ${
                     hoveredRow === job.id ? "bg-muted/30" : ""
-                  } ${selectedIds.includes(job.id) ? "bg-primary/5" : ""}`}
+                  } ${selectedIds.includes(job.id) ? "bg-primary/5" : ""} ${job.investigated ? "opacity-50" : ""}`}
                   onMouseEnter={() => setHoveredRow(job.id)}
                   onMouseLeave={() => setHoveredRow(null)}
                 >
@@ -229,10 +308,22 @@ export function JobTable({
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span>{job.company || "Unknown"}</span>
-                    </div>
+                    {job.company ? (
+                      <a
+                        href={`https://www.google.com/search?q=${encodeURIComponent(job.company)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:text-primary transition-colors group"
+                      >
+                        <Building2 className="h-4 w-4 text-muted-foreground shrink-0 group-hover:text-primary" />
+                        <span className="underline decoration-muted-foreground/30 group-hover:decoration-primary">{job.company}</span>
+                      </a>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-muted-foreground">Unknown</span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -266,6 +357,74 @@ export function JobTable({
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Calendar className="h-3 w-3" />
                       {job.posted_at ? formatRelativeTime(job.posted_at) : "Unknown"}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3">
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => onToggleInvestigated(job)}
+                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          job.investigated
+                            ? "bg-green-500 border-green-500 text-white"
+                            : "border-muted-foreground/30 hover:border-green-500"
+                        }`}
+                        title={job.investigated ? "Marquer non vu" : "Marquer vu"}
+                      >
+                        {job.investigated && <Check className="h-3 w-3" />}
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-2 py-3">
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => {
+                          const nextValue = job.viable === null ? true : job.viable === true ? false : null;
+                          onToggleViable(job, nextValue);
+                        }}
+                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          job.viable === true
+                            ? "bg-green-500 border-green-500 text-white"
+                            : job.viable === false
+                            ? "bg-red-500 border-red-500 text-white"
+                            : "border-muted-foreground/30 hover:border-muted-foreground"
+                        }`}
+                        title={job.viable === true ? "Viable" : job.viable === false ? "Non viable" : "Non décidé"}
+                      >
+                        {job.viable === true && <Check className="h-3 w-3" />}
+                        {job.viable === false && <X className="h-3 w-3" />}
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-2 py-3">
+                    <div className="flex justify-center">
+                      {onDraft ? (
+                        <button
+                          onClick={() => onDraft(job)}
+                          disabled={draftStatuses[job.id] === "generating"}
+                          className={`shrink-0 h-7 w-7 rounded flex items-center justify-center transition-colors ${
+                            draftStatuses[job.id] === "generating"
+                              ? "text-blue-400 animate-pulse"
+                              : draftStatuses[job.id] === "done"
+                              ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
+                              : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted"
+                          }`}
+                          title={
+                            draftStatuses[job.id] === "generating"
+                              ? "Generating..."
+                              : draftStatuses[job.id] === "done"
+                              ? "Re-generate draft"
+                              : "Generate draft cover letter"
+                          }
+                        >
+                          {draftStatuses[job.id] === "generating" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FileText className="h-4 w-4" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground/30">—</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">

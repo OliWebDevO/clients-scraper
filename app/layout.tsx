@@ -7,8 +7,8 @@ import { Sidebar } from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Clients & Jobs Scraper",
-  description: "Scrape potential clients and job offers",
+  title: "Clients & Jobs Finder",
+  description: "Find potential clients and job offers",
 };
 
 export default function RootLayout({

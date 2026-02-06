@@ -1,82 +1,149 @@
-import { BaseScraper, ScraperResult } from "./base";
+import { ScraperResult, randomDelay } from "./base";
 import type { Job } from "@/lib/types";
+import puppeteer from "puppeteer";
 
-export class IndeedScraper extends BaseScraper {
-  constructor() {
-    super("Indeed", "https://be.indeed.com");
-  }
+export class IndeedScraper {
+  private source = "Indeed";
+  private baseUrl = "https://be.indeed.com";
 
   async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
+    let browser;
 
     try {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-blink-features=AutomationControlled",
+        ],
+      });
+
+      const page = await browser.newPage();
+
+      // Stealth: override navigator.webdriver
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, "webdriver", { get: () => false });
+      });
+
+      await page.setUserAgent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      );
+      await page.setViewport({ width: 1280, height: 800 });
+
       for (const keyword of keywords) {
-        const searchUrl = this.buildSearchUrl(keyword, location);
-
         try {
-          const html = await this.fetchPage(searchUrl);
-          const $ = this.parseHtml(html);
+          const searchUrl = this.buildSearchUrl(keyword, location);
+          await randomDelay(2000, 4000);
 
-          // Indeed uses different selectors - try multiple
-          const jobCards = $(".job_seen_beacon, .jobsearch-ResultsList > li, .tapItem");
+          await page.goto(searchUrl, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          });
 
-          jobCards.each((_, element) => {
-            try {
-              const $el = $(element);
+          // Wait for job results to load
+          try {
+            await page.waitForSelector(
+              ".job_seen_beacon, .jobsearch-ResultsList, .tapItem, .result",
+              { timeout: 10000 }
+            );
+          } catch {
+            // Page may have loaded but with different selectors or captcha
+            console.log(`Indeed: no job cards found for "${keyword}", may be blocked`);
+            continue;
+          }
 
-              // Title
-              const titleEl = $el.find("h2.jobTitle a, .jobTitle > a, a[data-jk]").first();
-              const title = this.extractText(titleEl) ||
-                           this.extractText($el.find("h2.jobTitle span[title]"));
+          // Extract jobs from the page
+          const pageJobs = await page.evaluate((baseUrl: string) => {
+            const results: {
+              title: string;
+              company: string | null;
+              location: string | null;
+              salary: string | null;
+              url: string;
+            }[] = [];
 
+            const cards = document.querySelectorAll(
+              ".job_seen_beacon, .tapItem, .resultContent"
+            );
+
+            cards.forEach((card) => {
+              const titleEl =
+                card.querySelector("h2.jobTitle a") ||
+                card.querySelector("h2.jobTitle span[title]") ||
+                card.querySelector("a[data-jk]") ||
+                card.querySelector(".jobTitle a");
+              if (!titleEl) return;
+
+              const title = titleEl.textContent?.trim();
               if (!title) return;
 
-              // URL - Indeed uses data-jk attribute for job IDs
-              let url: string;
-              const jobKey = titleEl.attr("data-jk") || $el.attr("data-jk");
-              const href = titleEl.attr("href");
-
-              if (jobKey) {
-                url = `${this.baseUrl}/viewjob?jk=${jobKey}`;
-              } else if (href) {
-                url = this.normalizeUrl(href);
-              } else {
-                return;
+              // URL
+              let url = "";
+              const linkEl = titleEl.closest("a") || titleEl.querySelector("a");
+              const jk =
+                linkEl?.getAttribute("data-jk") ||
+                card.closest("[data-jk]")?.getAttribute("data-jk");
+              if (jk) {
+                url = `${baseUrl}/viewjob?jk=${jk}`;
+              } else if (linkEl?.getAttribute("href")) {
+                const href = linkEl.getAttribute("href")!;
+                url = href.startsWith("http") ? href : `${baseUrl}${href}`;
               }
+              if (!url) return;
 
-              // Company
-              const company = this.extractText($el.find(".companyName, [data-testid='company-name']"));
+              const company =
+                card.querySelector("[data-testid='company-name']")?.textContent?.trim() ||
+                card.querySelector(".companyName")?.textContent?.trim() ||
+                card.querySelector(".company")?.textContent?.trim() ||
+                null;
 
-              // Location
-              const jobLocation = this.extractText($el.find(".companyLocation, [data-testid='text-location']")) ||
-                                 location;
+              const location =
+                card.querySelector("[data-testid='text-location']")?.textContent?.trim() ||
+                card.querySelector(".companyLocation")?.textContent?.trim() ||
+                null;
 
-              // Salary
-              const salary = this.extractText($el.find(".salary-snippet-container, [data-testid='attribute_snippet_testid']"));
+              const salary =
+                card.querySelector("[data-testid='attribute_snippet_testid']")?.textContent?.trim() ||
+                card.querySelector(".salary-snippet-container")?.textContent?.trim() ||
+                card.querySelector(".salaryText")?.textContent?.trim() ||
+                null;
 
-              // Check for duplicates
-              if (jobs.some((j) => j.url === url)) return;
+              results.push({ title, company, location, salary, url });
+            });
 
-              // Match keywords
-              const matchedKeywords = this.matchesKeyword(title, keywords);
+            return results;
+          }, this.baseUrl);
 
-              jobs.push({
-                title,
-                company,
-                location: jobLocation,
-                salary,
-                url,
-                source: this.source,
-                keywords_matched: matchedKeywords.length > 0 ? matchedKeywords : [keyword],
-              });
-            } catch (err) {
-              console.error("Error parsing Indeed job:", err);
+          for (const pj of pageJobs) {
+            if (jobs.some((j) => j.url === pj.url)) continue;
+
+            const matchedKeywords = this.matchesKeyword(pj.title, keywords);
+            if (matchedKeywords.length === 0) {
+              matchedKeywords.push(keyword);
             }
-          });
+
+            jobs.push({
+              title: pj.title,
+              company: pj.company,
+              location: pj.location || location,
+              salary: pj.salary,
+              url: pj.url,
+              source: this.source,
+              keywords_matched: matchedKeywords,
+            });
+          }
         } catch (err) {
-          console.error(`Error fetching Indeed for keyword "${keyword}":`, err);
-          // Continue with next keyword
+          console.error(`Error scraping Indeed for keyword "${keyword}":`, err);
         }
+      }
+
+      if (jobs.length === 0) {
+        return {
+          jobs,
+          error: "Indeed: aucun résultat. Le site peut bloquer les requêtes automatisées.",
+        };
       }
 
       return { jobs };
@@ -85,6 +152,10 @@ export class IndeedScraper extends BaseScraper {
         jobs,
         error: error instanceof Error ? error.message : "Unknown error",
       };
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
     }
   }
 
@@ -94,7 +165,16 @@ export class IndeedScraper extends BaseScraper {
     if (location) {
       params.set("l", location);
     }
-    params.set("sort", "date"); // Sort by date to get newest
+    params.set("sort", "date");
     return `${this.baseUrl}/jobs?${params.toString()}`;
+  }
+
+  private matchesKeyword(text: string, keywords: string[]): string[] {
+    const lowerText = text.toLowerCase();
+    return keywords.filter((kw) => {
+      if (lowerText.includes(kw.toLowerCase())) return true;
+      const words = kw.toLowerCase().split(/\s+/).filter((w) => w.length >= 4);
+      return words.some((word) => lowerText.includes(word));
+    });
   }
 }
