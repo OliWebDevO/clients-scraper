@@ -20,6 +20,8 @@ import { Play, Download, Mail, Users, RefreshCw } from "lucide-react";
 export default function ClientsPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -52,12 +54,17 @@ export default function ClientsPage() {
 
   const { toast } = useToast();
 
-  const fetchBusinesses = async () => {
+  const PAGE_SIZE = 50;
+
+  const fetchBusinesses = async (p = page) => {
     setLoading(true);
-    const { data, error } = await supabase
+    const from = p * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
       .from("businesses")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("id,name,address,phone,rating,review_count,category,google_maps_url,has_website,website_url,website_score,website_issues,location_query,investigated,viable,created_at,updated_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       toast({
@@ -67,6 +74,7 @@ export default function ClientsPage() {
       });
     } else {
       setBusinesses(data || []);
+      setTotalCount(count || 0);
     }
     setLoading(false);
   };
@@ -90,9 +98,9 @@ export default function ClientsPage() {
   }, []);
 
   useEffect(() => {
-    fetchBusinesses();
+    fetchBusinesses(page);
     fetchDraftStatuses();
-  }, []);
+  }, [page]);
 
   // Get unique categories
   const categories = useMemo(() => {
@@ -493,11 +501,11 @@ export default function ClientsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Clients</h1>
           <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-            {filteredBusinesses.length} potential clients found
+            {filteredBusinesses.length} of {totalCount} potential clients
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" onClick={fetchBusinesses} disabled={loading} className="flex-1 sm:flex-none">
+          <Button variant="outline" size="sm" onClick={() => fetchBusinesses()} disabled={loading} className="flex-1 sm:flex-none">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="hidden xs:inline">Refresh</span>
           </Button>
@@ -547,6 +555,33 @@ export default function ClientsPage() {
           onDraft={handleDraft}
           draftStatuses={draftStatuses}
         />
+      )}
+
+      {/* Pagination */}
+      {totalCount > PAGE_SIZE && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-muted-foreground">
+            Page {page + 1} / {Math.ceil(totalCount / PAGE_SIZE)}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={(page + 1) * PAGE_SIZE >= totalCount}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Modals */}

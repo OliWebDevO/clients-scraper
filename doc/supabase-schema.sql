@@ -139,6 +139,14 @@ CREATE TABLE IF NOT EXISTS business_drafts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- App users (authentication)
+CREATE TABLE IF NOT EXISTS app_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_businesses_location ON businesses(location_query);
 CREATE INDEX IF NOT EXISTS idx_businesses_rating ON businesses(rating);
@@ -153,6 +161,13 @@ CREATE INDEX IF NOT EXISTS idx_job_drafts_job_id ON job_drafts(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_drafts_status ON job_drafts(status);
 CREATE INDEX IF NOT EXISTS idx_business_drafts_business_id ON business_drafts(business_id);
 CREATE INDEX IF NOT EXISTS idx_business_drafts_status ON business_drafts(status);
+CREATE INDEX IF NOT EXISTS idx_businesses_investigated ON businesses(investigated);
+CREATE INDEX IF NOT EXISTS idx_businesses_viable ON businesses(viable);
+CREATE INDEX IF NOT EXISTS idx_jobs_investigated ON jobs(investigated);
+CREATE INDEX IF NOT EXISTS idx_jobs_viable ON jobs(viable);
+CREATE INDEX IF NOT EXISTS idx_sent_emails_status ON sent_emails(status);
+CREATE INDEX IF NOT EXISTS idx_businesses_viable_created ON businesses(viable, created_at);
+CREATE INDEX IF NOT EXISTS idx_app_users_email ON app_users(email);
 
 -- Enable Row Level Security (optional, for production)
 -- ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;

@@ -101,154 +101,187 @@ export async function scrapeGoogleMapsWithProgress(
         phase: "searching",
       });
 
+      let processedIndices = 0;
+      let totalScrolls = 5;
+      const MAX_SCROLLS = 20;
+
       await scrollResults(page, 5);
 
-      // Get all result links
-      const resultLinks = await page.$$('a[href*="/maps/place/"]');
-      console.log(`Found ${resultLinks.length} result links`);
+      // Keep trying until we have enough results or exhaust options
+      while (allBusinesses.length < maxResults && totalScrolls < MAX_SCROLLS) {
+        const resultLinks = await page.$$('a[href*="/maps/place/"]');
+        console.log(`Found ${resultLinks.length} result links (processed: ${processedIndices})`);
 
-      const totalToProcess = Math.min(resultLinks.length, maxResults * 2);
+        if (processedIndices >= resultLinks.length) {
+          // No new links to process, scroll more
+          await scrollResults(page, 3);
+          totalScrolls += 3;
+          const newLinks = await page.$$('a[href*="/maps/place/"]');
+          if (newLinks.length <= processedIndices) {
+            // No new results after scrolling, break
+            console.log("No new results after scrolling, stopping");
+            break;
+          }
+          continue;
+        }
 
-      // Process each result
-      for (let i = 0; i < totalToProcess && allBusinesses.length < maxResults; i++) {
-        try {
-          const progressPercent = 25 + ((allBusinesses.length / maxResults) * 65);
+        const totalToProcess = resultLinks.length;
 
-          onProgress({
-            current: allBusinesses.length,
-            total: maxResults,
-            progress: Math.min(progressPercent, 90),
-            message: `Extraction ${i + 1}/${totalToProcess}...`,
-            phase: "extracting",
-          });
+        // Process each result
+        for (let i = processedIndices; i < totalToProcess && allBusinesses.length < maxResults; i++) {
+          processedIndices = i + 1;
+          try {
+            const progressPercent = 25 + ((allBusinesses.length / maxResults) * 65);
 
-          // Re-get the links since DOM might have changed
-          const currentLinks = await page.$$('a[href*="/maps/place/"]');
-          if (i >= currentLinks.length) break;
+            onProgress({
+              current: allBusinesses.length,
+              total: maxResults,
+              progress: Math.min(progressPercent, 90),
+              message: `Extraction ${i + 1}/${totalToProcess}...`,
+              phase: "extracting",
+            });
 
-          const link = currentLinks[i];
-          await link.click();
-          await delay(2500);
+            // Re-get the links since DOM might have changed
+            const currentLinks = await page.$$('a[href*="/maps/place/"]');
+            if (i >= currentLinks.length) break;
 
-          // Extract business details
-          const businessData = await page.evaluate(() => {
-            let name = document.querySelector("h1.DUwDvf")?.textContent?.trim();
-            if (!name) name = document.querySelector('[data-item-id="title"] h1')?.textContent?.trim();
-            if (!name) name = document.querySelector("h1")?.textContent?.trim();
-            if (!name) return null;
+            const link = currentLinks[i];
+            await link.click();
+            await delay(2500);
 
-            const ratingEl = document.querySelector('div.F7nice span[aria-hidden="true"]');
-            const rating = ratingEl?.textContent?.trim() || null;
+            // Extract business details
+            const businessData = await page.evaluate(() => {
+              let name = document.querySelector("h1.DUwDvf")?.textContent?.trim();
+              if (!name) name = document.querySelector('[data-item-id="title"] h1')?.textContent?.trim();
+              if (!name) name = document.querySelector("h1")?.textContent?.trim();
+              if (!name) return null;
 
-            const reviewEl = document.querySelector(
-              'div.F7nice span[aria-label*="review"], div.F7nice span[aria-label*="avis"]'
-            );
-            let reviewCount = reviewEl?.getAttribute("aria-label")?.match(/\d+/)?.[0] || null;
-            if (!reviewCount) {
-              const reviewText = document.querySelector("div.F7nice")?.textContent || "";
-              const match = reviewText.match(/\((\d+)\)/);
-              if (match) reviewCount = match[1];
+              const ratingEl = document.querySelector('div.F7nice span[aria-hidden="true"]');
+              const rating = ratingEl?.textContent?.trim() || null;
+
+              const reviewEl = document.querySelector(
+                'div.F7nice span[aria-label*="review"], div.F7nice span[aria-label*="avis"]'
+              );
+              let reviewCount = reviewEl?.getAttribute("aria-label")?.match(/\d+/)?.[0] || null;
+              if (!reviewCount) {
+                const reviewText = document.querySelector("div.F7nice")?.textContent || "";
+                const match = reviewText.match(/\((\d+)\)/);
+                if (match) reviewCount = match[1];
+              }
+
+              const categoryEl = document.querySelector('button[jsaction*="category"]');
+              const categoryText = categoryEl?.textContent?.trim() || null;
+
+              const addressEl = document.querySelector('button[data-item-id="address"]');
+              const address =
+                addressEl
+                  ?.getAttribute("aria-label")
+                  ?.replace(/^Adresse\s*:\s*/i, "")
+                  .replace(/^Address\s*:\s*/i, "")
+                  .trim() ||
+                addressEl?.textContent?.trim() ||
+                null;
+
+              const phoneEl = document.querySelector('button[data-item-id^="phone"]');
+              const phone = phoneEl?.getAttribute("aria-label")?.replace(/[^\d+\s-]/g, "").trim() || null;
+
+              const websiteEl = document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement;
+              const websiteUrl = websiteEl?.href || null;
+
+              const mapsUrl = window.location.href;
+
+              return { name, rating, reviewCount, category: categoryText, address, phone, websiteUrl, mapsUrl };
+            });
+
+            if (!businessData?.name) continue;
+
+            // Check if already exists
+            const key = `${businessData.name}|||${businessData.address || ""}`.toLowerCase();
+            if (existingSet.has(key)) continue;
+
+            // Check for duplicates in current batch
+            if (allBusinesses.some((b) => b.name === businessData.name && b.address === businessData.address)) continue;
+
+            // Apply rating filter
+            const rating = parseRating(businessData.rating);
+            if (config.minRating && rating && rating < config.minRating) continue;
+
+            const business: Partial<Business> = {
+              name: businessData.name,
+              address: businessData.address,
+              phone: businessData.phone,
+              rating,
+              review_count: parseReviewCount(businessData.reviewCount),
+              category: businessData.category || category,
+              google_maps_url: businessData.mapsUrl,
+              has_website: !!businessData.websiteUrl,
+              website_url: businessData.websiteUrl,
+              website_score: null,
+              website_issues: null,
+              location_query: config.location,
+            };
+
+            // Analyze website if present
+            if (business.website_url) {
+              onProgress({
+                current: allBusinesses.length,
+                total: maxResults,
+                progress: Math.min(25 + ((allBusinesses.length / maxResults) * 65), 90),
+                message: `Analyse: ${businessData.name}...`,
+                businessName: businessData.name,
+                phase: "analyzing",
+              });
+
+              try {
+                const analysis = await analyzeWebsite(business.website_url);
+                if (analysis) {
+                  business.website_score = analysis.score;
+                  business.website_issues = analysis.issues;
+
+                  // Skip businesses with GOOD websites (score < 25)
+                  if (analysis.score < 25) {
+                    console.log(`Skipping ${businessData.name} - good website (score: ${analysis.score})`);
+                    continue;
+                  }
+                }
+              } catch (err) {
+                console.error(`Error analyzing ${business.website_url}:`, err);
+              }
             }
 
-            const categoryEl = document.querySelector('button[jsaction*="category"]');
-            const categoryText = categoryEl?.textContent?.trim() || null;
+            allBusinesses.push(business);
 
-            const addressEl = document.querySelector('button[data-item-id="address"]');
-            const address =
-              addressEl
-                ?.getAttribute("aria-label")
-                ?.replace(/^Adresse\s*:\s*/i, "")
-                .replace(/^Address\s*:\s*/i, "")
-                .trim() ||
-              addressEl?.textContent?.trim() ||
-              null;
-
-            const phoneEl = document.querySelector('button[data-item-id^="phone"]');
-            const phone = phoneEl?.getAttribute("aria-label")?.replace(/[^\d+\s-]/g, "").trim() || null;
-
-            const websiteEl = document.querySelector('a[data-item-id="authority"]') as HTMLAnchorElement;
-            const websiteUrl = websiteEl?.href || null;
-
-            const mapsUrl = window.location.href;
-
-            return { name, rating, reviewCount, category: categoryText, address, phone, websiteUrl, mapsUrl };
-          });
-
-          if (!businessData?.name) continue;
-
-          // Check if already exists
-          const key = `${businessData.name}|||${businessData.address || ""}`.toLowerCase();
-          if (existingSet.has(key)) continue;
-
-          // Check for duplicates in current batch
-          if (allBusinesses.some((b) => b.name === businessData.name && b.address === businessData.address)) continue;
-
-          // Apply rating filter
-          const rating = parseRating(businessData.rating);
-          if (config.minRating && rating && rating < config.minRating) continue;
-
-          const business: Partial<Business> = {
-            name: businessData.name,
-            address: businessData.address,
-            phone: businessData.phone,
-            rating,
-            review_count: parseReviewCount(businessData.reviewCount),
-            category: businessData.category || category,
-            google_maps_url: businessData.mapsUrl,
-            has_website: !!businessData.websiteUrl,
-            website_url: businessData.websiteUrl,
-            website_score: null,
-            website_issues: null,
-            location_query: config.location,
-          };
-
-          // Analyze website if present
-          if (business.website_url) {
             onProgress({
               current: allBusinesses.length,
               total: maxResults,
               progress: Math.min(25 + ((allBusinesses.length / maxResults) * 65), 90),
-              message: `Analyse: ${businessData.name}...`,
+              message: `Trouvé: ${businessData.name}`,
               businessName: businessData.name,
-              phase: "analyzing",
+              phase: "extracting",
             });
 
-            try {
-              const analysis = await analyzeWebsite(business.website_url);
-              if (analysis) {
-                business.website_score = analysis.score;
-                business.website_issues = analysis.issues;
+            console.log(
+              `Added: ${businessData.name} | Website: ${business.has_website ? `Yes (score: ${business.website_score})` : "No"}`
+            );
 
-                // Skip businesses with GOOD websites (score < 25)
-                if (analysis.score < 25) {
-                  console.log(`Skipping ${businessData.name} - good website (score: ${analysis.score})`);
-                  continue;
-                }
-              }
-            } catch (err) {
-              console.error(`Error analyzing ${business.website_url}:`, err);
-            }
+            await randomDelay(800, 1500);
+          } catch (err) {
+            console.error(`Error processing result ${i}:`, err);
+            continue;
           }
+        }
 
-          allBusinesses.push(business);
-
+        // If still not enough, scroll more
+        if (allBusinesses.length < maxResults) {
           onProgress({
             current: allBusinesses.length,
             total: maxResults,
-            progress: Math.min(25 + ((allBusinesses.length / maxResults) * 65), 90),
-            message: `Trouvé: ${businessData.name}`,
-            businessName: businessData.name,
-            phase: "extracting",
+            progress: Math.min(25 + ((allBusinesses.length / maxResults) * 65), 85),
+            message: `${allBusinesses.length}/${maxResults} trouvés, chargement de plus de résultats...`,
+            phase: "searching",
           });
-
-          console.log(
-            `Added: ${businessData.name} | Website: ${business.has_website ? `Yes (score: ${business.website_score})` : "No"}`
-          );
-
-          await randomDelay(800, 1500);
-        } catch (err) {
-          console.error(`Error processing result ${i}:`, err);
-          continue;
+          await scrollResults(page, 3);
+          totalScrolls += 3;
         }
       }
 

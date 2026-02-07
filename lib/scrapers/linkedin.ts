@@ -6,13 +6,14 @@ export class LinkedInScraper extends BaseScraper {
     super("LinkedIn", "https://www.linkedin.com");
   }
 
-  async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
+  async scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
 
     try {
       for (const keyword of keywords) {
-        // Fetch 2 pages (10 results each) for more results
-        for (const start of [0, 10]) {
+        // Fetch 2 pages (25 results each) for more results
+        const pageOffset = ((page || 1) - 1) * 50;
+        for (const start of [pageOffset, pageOffset + 25]) {
           const searchUrl = this.buildSearchUrl(keyword, location, start);
 
           try {

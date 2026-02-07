@@ -19,7 +19,7 @@ export class ActirisScraper extends BaseScraper {
     super("Actiris", "https://www.actiris.brussels");
   }
 
-  async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
+  async scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
 
     try {
@@ -39,7 +39,7 @@ export class ActirisScraper extends BaseScraper {
               },
               body: JSON.stringify({
                 offreFilter: { texte: keyword },
-                pageOption: { page: 1 },
+                pageOption: { page: page || 1 },
               }),
             }
           );

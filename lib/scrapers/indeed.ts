@@ -6,7 +6,7 @@ export class IndeedScraper {
   private source = "Indeed";
   private baseUrl = "https://be.indeed.com";
 
-  async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
+  async scrape(keywords: string[], location?: string, pageNum?: number): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
     let browser;
 
@@ -34,7 +34,7 @@ export class IndeedScraper {
 
       for (const keyword of keywords) {
         try {
-          const searchUrl = this.buildSearchUrl(keyword, location);
+          const searchUrl = this.buildSearchUrl(keyword, location, pageNum);
           await randomDelay(2000, 4000);
 
           await page.goto(searchUrl, {
@@ -159,13 +159,14 @@ export class IndeedScraper {
     }
   }
 
-  private buildSearchUrl(keyword: string, location?: string): string {
+  private buildSearchUrl(keyword: string, location?: string, page = 1): string {
     const params = new URLSearchParams();
     params.set("q", keyword);
     if (location) {
       params.set("l", location);
     }
     params.set("sort", "date");
+    if (page > 1) params.set("start", ((page - 1) * 10).toString());
     return `${this.baseUrl}/jobs?${params.toString()}`;
   }
 

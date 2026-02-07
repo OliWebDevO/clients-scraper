@@ -85,7 +85,7 @@ export abstract class BaseScraper {
     this.baseUrl = baseUrl;
   }
 
-  abstract scrape(keywords: string[], location?: string): Promise<ScraperResult>;
+  abstract scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult>;
 
   protected async fetchPage(url: string): Promise<string> {
     await randomDelay(2000, 5000);

@@ -107,13 +107,18 @@ Rules:
 - Keep approximately the same length as the original
 - Preserve the exact same blank line pattern as the original: if the original has multiple consecutive blank lines between sections, reproduce them exactly`;
 
-function buildProposalUserPrompt(input: CustomizeProposalInput): string {
-  const issues = input.websiteIssues?.join(", ") || "N/A";
+function sanitizeAiInput(str: string | null | undefined): string {
+  if (!str) return "";
+  return str.substring(0, 500).replace(/\n/g, " ").replace(/\t/g, " ").trim();
+}
 
-  return `Business Name: ${input.businessName}
-Category: ${input.businessCategory || "Unknown"}
-Address: ${input.businessAddress || "Unknown"}
-Website: ${input.websiteUrl || "No website"}
+function buildProposalUserPrompt(input: CustomizeProposalInput): string {
+  const issues = input.websiteIssues?.map(i => sanitizeAiInput(i)).join(", ") || "N/A";
+
+  return `Business Name: ${sanitizeAiInput(input.businessName)}
+Category: ${sanitizeAiInput(input.businessCategory) || "Unknown"}
+Address: ${sanitizeAiInput(input.businessAddress) || "Unknown"}
+Website: ${sanitizeAiInput(input.websiteUrl) || "No website"}
 Website Score: ${input.websiteScore !== null ? `${input.websiteScore}/100 (higher = worse)` : "N/A"}
 Website Issues: ${issues}
 

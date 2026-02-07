@@ -15,6 +15,8 @@ import { Play, Download, RefreshCw, Briefcase } from "lucide-react";
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [scrapeModalOpen, setScrapeModalOpen] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
@@ -42,12 +44,17 @@ export default function JobsPage() {
 
   const { toast } = useToast();
 
-  const fetchJobs = async () => {
+  const PAGE_SIZE = 50;
+
+  const fetchJobs = async (p = page) => {
     setLoading(true);
-    const { data, error } = await supabase
+    const from = p * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
       .from("jobs")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("id,title,company,location,salary,description,url,source,keywords_matched,posted_at,investigated,viable,created_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       toast({
@@ -57,6 +64,7 @@ export default function JobsPage() {
       });
     } else {
       setJobs(data || []);
+      setTotalCount(count || 0);
     }
     setLoading(false);
   };
@@ -80,9 +88,9 @@ export default function JobsPage() {
   }, []);
 
   useEffect(() => {
-    fetchJobs();
+    fetchJobs(page);
     fetchDraftStatuses();
-  }, []);
+  }, [page]);
 
   // Get unique keywords
   const allKeywords = useMemo(() => {
@@ -376,11 +384,11 @@ export default function JobsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Jobs</h1>
           <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-            {filteredJobs.length} job opportunities found
+            {filteredJobs.length} of {totalCount} job opportunities
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" onClick={fetchJobs} disabled={loading} className="flex-1 sm:flex-none">
+          <Button variant="outline" size="sm" onClick={() => fetchJobs()} disabled={loading} className="flex-1 sm:flex-none">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="hidden xs:inline">Refresh</span>
           </Button>
@@ -423,6 +431,33 @@ export default function JobsPage() {
           onDraft={handleDraft}
           draftStatuses={draftStatuses}
         />
+      )}
+
+      {/* Pagination */}
+      {totalCount > PAGE_SIZE && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm text-muted-foreground">
+            Page {page + 1} / {Math.ceil(totalCount / PAGE_SIZE)}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={(page + 1) * PAGE_SIZE >= totalCount}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Modals */}

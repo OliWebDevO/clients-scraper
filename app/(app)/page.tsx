@@ -45,7 +45,7 @@ export default function Dashboard() {
           supabase.from("sent_emails").select("id", { count: "exact", head: true }),
           supabase
             .from("scrape_logs")
-            .select("*")
+            .select("id,type,source,status,items_found,started_at")
             .order("started_at", { ascending: false })
             .limit(5),
         ]);

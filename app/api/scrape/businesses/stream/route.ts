@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 300; // 5 minutes max
 
 export async function POST(request: NextRequest) {
+  if (isRateLimited("scrape-businesses", 5, 60 * 1000)) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  }
+
   const body = await request.json();
   const { location, radius, minRating, categories, maxResults = 10 } = body;
 
@@ -86,34 +91,40 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        // Insert businesses into database
+        // Insert businesses into database in batches
         sendEvent("status", { message: "Sauvegarde des résultats...", progress: 95 });
 
         let insertedCount = 0;
+        const buffer: Record<string, unknown>[] = [];
+
         for (const business of result.businesses) {
           if (!business.name) continue;
 
-          const { error } = await supabase.from("businesses").upsert(
-            {
-              name: business.name,
-              address: business.address || null,
-              phone: business.phone || null,
-              rating: business.rating || null,
-              review_count: business.review_count || null,
-              category: business.category || null,
-              google_maps_url: business.google_maps_url || null,
-              has_website: business.has_website || false,
-              website_url: business.website_url || null,
-              website_score: business.website_score || null,
-              website_issues: business.website_issues || null,
-              location_query: business.location_query || location,
-            },
-            { onConflict: "name,address" }
-          );
+          buffer.push({
+            name: business.name,
+            address: business.address || null,
+            phone: business.phone || null,
+            rating: business.rating || null,
+            review_count: business.review_count || null,
+            category: business.category || null,
+            google_maps_url: business.google_maps_url || null,
+            has_website: business.has_website || false,
+            website_url: business.website_url || null,
+            website_score: business.website_score || null,
+            website_issues: business.website_issues || null,
+            location_query: business.location_query || location,
+          });
 
-          if (!error) {
-            insertedCount++;
+          if (buffer.length >= 25) {
+            const { error } = await supabase.from("businesses").upsert(buffer, { onConflict: "name,address" });
+            if (!error) insertedCount += buffer.length;
+            buffer.length = 0;
           }
+        }
+
+        if (buffer.length > 0) {
+          const { error } = await supabase.from("businesses").upsert(buffer, { onConflict: "name,address" });
+          if (!error) insertedCount += buffer.length;
         }
 
         // Update scrape log

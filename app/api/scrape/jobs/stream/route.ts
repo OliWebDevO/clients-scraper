@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
 import { expandKeywords } from "@/lib/scrapers/base";
+import { isRateLimited } from "@/lib/rate-limit";
 import type { JobPlatform, Job } from "@/lib/types";
 
 export const maxDuration = 300; // 5 minutes max
@@ -14,6 +15,10 @@ interface ScrapeJobsRequest {
 }
 
 export async function POST(request: NextRequest) {
+  if (isRateLimited("scrape-jobs", 5, 60 * 1000)) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  }
+
   const body: ScrapeJobsRequest = await request.json();
   const { platforms, location } = body;
   const MAX_JOBS = body.maxResults || 20;
@@ -158,6 +163,56 @@ export async function POST(request: NextRequest) {
               platform,
             });
           }
+        }
+
+        // If we don't have enough jobs, paginate through additional pages
+        let currentPage = 1;
+        const MAX_PAGES = 3;
+
+        while (allJobs.length < MAX_JOBS && currentPage < MAX_PAGES) {
+          currentPage++;
+
+          let foundNewInThisPass = false;
+
+          for (let i = 0; i < platforms.length; i++) {
+            if (allJobs.length >= MAX_JOBS) break;
+
+            const platform = platforms[i];
+
+            sendEvent("progress", {
+              current: allJobs.length,
+              total: MAX_JOBS,
+              progress: Math.round((allJobs.length / MAX_JOBS) * 80),
+              message: `${allJobs.length}/${MAX_JOBS} - Recherche page ${currentPage} sur ${platform}...`,
+              phase: "scraping",
+              platform,
+            });
+
+            try {
+              const scraper = getScraperForPlatform(platform);
+              const result = await scraper.scrape(keywords, location, currentPage);
+
+              if (result.error || result.jobs.length === 0) continue;
+
+              const newJobs = result.jobs.filter(job =>
+                job.url && !existingUrls.has(job.url) && job.title
+              );
+
+              if (newJobs.length > 0) foundNewInThisPass = true;
+
+              const remainingSlots = MAX_JOBS - allJobs.length;
+              const jobsToAdd = newJobs.slice(0, remainingSlots);
+              allJobs.push(...jobsToAdd);
+
+              jobsToAdd.forEach(job => {
+                if (job.url) existingUrls.add(job.url);
+              });
+            } catch (error) {
+              console.error(`Error scraping ${platform} page ${currentPage}:`, error);
+            }
+          }
+
+          if (!foundNewInThisPass) break;
         }
 
         // Insert jobs into database

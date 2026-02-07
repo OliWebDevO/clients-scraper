@@ -8,7 +8,7 @@ import type { JobPlatform } from "@/lib/types";
 import type { ScraperResult } from "./base";
 
 interface Scraper {
-  scrape(keywords: string[], location?: string): Promise<ScraperResult>;
+  scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult>;
 }
 
 export function getScraperForPlatform(platform: JobPlatform): Scraper {

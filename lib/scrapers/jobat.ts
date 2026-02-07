@@ -6,12 +6,12 @@ export class JobatScraper extends BaseScraper {
     super("Jobat", "https://www.jobat.be");
   }
 
-  async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
+  async scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
 
     try {
       for (const keyword of keywords) {
-        const searchUrl = this.buildSearchUrl(keyword);
+        const searchUrl = this.buildSearchUrl(keyword, page);
 
         try {
           const html = await this.fetchPage(searchUrl);
@@ -73,9 +73,10 @@ export class JobatScraper extends BaseScraper {
     }
   }
 
-  private buildSearchUrl(keyword: string): string {
+  private buildSearchUrl(keyword: string, page = 1): string {
     // Jobat uses /en/jobs/results/{keyword-slug} URL pattern
     const slug = keyword.replace(/\s+/g, "-").toLowerCase();
-    return `${this.baseUrl}/en/jobs/results/${slug}`;
+    const base = `${this.baseUrl}/en/jobs/results/${slug}`;
+    return page > 1 ? `${base}?page=${page}` : base;
   }
 }

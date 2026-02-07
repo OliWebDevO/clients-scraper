@@ -13,7 +13,9 @@ import {
   Menu,
   X,
   PanelLeftClose,
+  LogOut,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +34,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
   // Close sidebar on route change (mobile)
@@ -148,11 +151,18 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
           {/* Footer */}
           <div className="border-t border-border p-4">
-            <div className="rounded-md bg-muted p-3">
-              <p className="text-xs text-muted-foreground">
-                Find clients & jobs faster with automated searching.
-              </p>
-            </div>
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                router.push("/login");
+                router.refresh();
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
           </div>
         </div>
       </aside>

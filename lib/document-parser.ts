@@ -19,6 +19,11 @@ export interface ParsedDocument {
 }
 
 export async function downloadAndParseDocument(storagePath: string, mimeType: string): Promise<ParsedDocument> {
+  // Prevent path traversal attacks
+  if (storagePath.includes("..") || storagePath.startsWith("/")) {
+    throw new Error("Invalid storage path");
+  }
+
   const supabase = createServerSupabaseClient();
 
   const { data, error } = await supabase.storage.from("documents").download(storagePath);
@@ -89,17 +94,17 @@ async function parseDocx(buffer: Buffer): Promise<ParsedDocument> {
   text = text.replace(/\n{7,}/g, "\n\n\n\n\n\n").trim();
 
   // Extract style info from DOCX XML (it's a ZIP)
-  const alignment = extractDocxAlignment(buffer);
-  const { fontFamily, fontSize } = extractDocxFont(buffer);
-  const margins = extractDocxMargins(buffer);
-  const paragraphSpacing = extractDocxParagraphSpacing(buffer);
+  const alignment = await extractDocxAlignment(buffer);
+  const { fontFamily, fontSize } = await extractDocxFont(buffer);
+  const margins = await extractDocxMargins(buffer);
+  const paragraphSpacing = await extractDocxParagraphSpacing(buffer);
 
   return { text, alignment, fontFamily, fontSize, margins, paragraphSpacing };
 }
 
-function extractDocxAlignment(buffer: Buffer): TextAlignment {
+async function extractDocxAlignment(buffer: Buffer): Promise<TextAlignment> {
   try {
-    const AdmZip = require("adm-zip");
+    const AdmZip = (await import("adm-zip")).default;
     const zip = new AdmZip(buffer);
 
     // Check default alignment from word/styles.xml
@@ -157,9 +162,9 @@ function extractDocxAlignment(buffer: Buffer): TextAlignment {
   }
 }
 
-function extractDocxFont(buffer: Buffer): { fontFamily: string; fontSize: number } {
+async function extractDocxFont(buffer: Buffer): Promise<{ fontFamily: string; fontSize: number }> {
   try {
-    const AdmZip = require("adm-zip");
+    const AdmZip = (await import("adm-zip")).default;
     const zip = new AdmZip(buffer);
     const stylesXml = zip.readAsText("word/styles.xml") || "";
     const documentXml = zip.readAsText("word/document.xml") || "";
@@ -220,9 +225,9 @@ function extractDocxFont(buffer: Buffer): { fontFamily: string; fontSize: number
   }
 }
 
-function extractDocxMargins(buffer: Buffer): PageMargins | undefined {
+async function extractDocxMargins(buffer: Buffer): Promise<PageMargins | undefined> {
   try {
-    const AdmZip = require("adm-zip");
+    const AdmZip = (await import("adm-zip")).default;
     const zip = new AdmZip(buffer);
     const documentXml = zip.readAsText("word/document.xml") || "";
 
@@ -250,9 +255,9 @@ function extractDocxMargins(buffer: Buffer): PageMargins | undefined {
   }
 }
 
-function extractDocxParagraphSpacing(buffer: Buffer): number | undefined {
+async function extractDocxParagraphSpacing(buffer: Buffer): Promise<number | undefined> {
   try {
-    const AdmZip = require("adm-zip");
+    const AdmZip = (await import("adm-zip")).default;
     const zip = new AdmZip(buffer);
     const stylesXml = zip.readAsText("word/styles.xml") || "";
     const documentXml = zip.readAsText("word/document.xml") || "";

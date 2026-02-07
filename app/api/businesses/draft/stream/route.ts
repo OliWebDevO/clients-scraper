@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { downloadAndParseDocument } from "@/lib/document-parser";
 import { customizeProposal } from "@/lib/ai-customize";
 import { generateDocx } from "@/lib/docx-generator";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 120; // 2 minutes max
 
@@ -26,6 +27,10 @@ interface DraftRequest {
 }
 
 export async function POST(request: NextRequest) {
+  if (isRateLimited("draft-business", 10, 60 * 1000)) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  }
+
   const body: DraftRequest = await request.json();
   const { businessId } = body;
 

@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     // Upload to Supabase Storage
     const ext = file.name.split(".").pop() || "pdf";
-    const storagePath = `${type}/${Date.now()}.${ext}`;
+    const storagePath = `${type}/${crypto.randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await supabase.storage

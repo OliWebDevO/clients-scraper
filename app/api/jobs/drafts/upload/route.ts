@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Upload to Supabase Storage
     const ext = file.name.split(".").pop() || "docx";
-    const storagePath = `drafts/final/${draftId}/${Date.now()}.${ext}`;
+    const storagePath = `drafts/final/${draftId}/${crypto.randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await supabase.storage

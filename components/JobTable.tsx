@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   ExternalLink,
   Calendar,
@@ -37,7 +37,7 @@ const platformColors: Record<string, string> = {
   jobsora: "bg-cyan-500/20 text-cyan-400",
 };
 
-export function JobTable({
+export const JobTable = React.memo(function JobTable({
   jobs,
   selectedIds,
   onSelectionChange,
@@ -420,4 +420,4 @@ export function JobTable({
       </div>
     </>
   );
-}
+});

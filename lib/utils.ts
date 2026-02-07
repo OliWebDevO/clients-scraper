@@ -67,7 +67,11 @@ export function replaceTemplateVariables(
   let result = template;
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g");
-    result = result.replace(regex, value || "");
+    const safe = (value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    result = result.replace(regex, safe);
   }
   return result;
 }

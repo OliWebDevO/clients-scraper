@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { sendEmail } from "@/lib/resend";
+import { isRateLimited } from "@/lib/rate-limit";
 
 interface SendEmailRequest {
   recipientEmail: string;
@@ -11,6 +12,10 @@ interface SendEmailRequest {
 }
 
 export async function POST(request: NextRequest) {
+  if (isRateLimited("email-send", 20, 60 * 1000)) {
+    return NextResponse.json({ success: false, error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const body: SendEmailRequest = await request.json();
     const { recipientEmail, subject, body: emailBody, businessId, templateId } = body;
@@ -22,8 +27,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert plain text to HTML
-    const htmlBody = emailBody
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recipientEmail)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid email address" },
+        { status: 400 }
+      );
+    }
+
+    // Escape HTML entities then convert to HTML formatting
+    const htmlBody = escapeHtml(emailBody)
       .replace(/\n/g, "<br>")
       .replace(/  /g, "&nbsp;&nbsp;");
 
@@ -62,4 +76,13 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }

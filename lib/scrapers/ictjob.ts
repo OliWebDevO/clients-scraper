@@ -6,12 +6,12 @@ export class ICTJobScraper extends BaseScraper {
     super("ICTJob", "https://www.ictjob.be");
   }
 
-  async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
+  async scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
 
     try {
       for (const keyword of keywords) {
-        const searchUrl = this.buildSearchUrl(keyword, location);
+        const searchUrl = this.buildSearchUrl(keyword, location, page);
         const html = await this.fetchPage(searchUrl);
         const $ = this.parseHtml(html);
 
@@ -71,10 +71,11 @@ export class ICTJobScraper extends BaseScraper {
     }
   }
 
-  private buildSearchUrl(keyword: string, location?: string): string {
+  private buildSearchUrl(keyword: string, location?: string, page = 1): string {
     const params = new URLSearchParams();
     params.set("q", keyword);
     if (location) params.set("location", location);
+    if (page > 1) params.set("page", page.toString());
     return `${this.baseUrl}/en/search-it-jobs?${params.toString()}`;
   }
 }

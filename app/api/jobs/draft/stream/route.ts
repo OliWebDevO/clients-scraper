@@ -4,6 +4,7 @@ import { scrapeJobDescription } from "@/lib/job-description-scraper";
 import { downloadAndParseDocument } from "@/lib/document-parser";
 import { customizeCoverLetter } from "@/lib/ai-customize";
 import { generateDocx } from "@/lib/docx-generator";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 120; // 2 minutes max
 
@@ -30,6 +31,10 @@ interface DraftRequest {
 }
 
 export async function POST(request: NextRequest) {
+  if (isRateLimited("draft-job", 10, 60 * 1000)) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  }
+
   const body: DraftRequest = await request.json();
   const { jobId } = body;
 

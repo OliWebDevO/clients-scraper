@@ -6,12 +6,12 @@ export class JobsoraScraper extends BaseScraper {
     super("Jobsora", "https://be.jobsora.com");
   }
 
-  async scrape(keywords: string[], location?: string): Promise<ScraperResult> {
+  async scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult> {
     const jobs: Partial<Job>[] = [];
 
     try {
       for (const keyword of keywords) {
-        const searchUrl = this.buildSearchUrl(keyword);
+        const searchUrl = this.buildSearchUrl(keyword, page);
 
         try {
           const html = await this.fetchPage(searchUrl);
@@ -73,9 +73,10 @@ export class JobsoraScraper extends BaseScraper {
     }
   }
 
-  private buildSearchUrl(keyword: string): string {
+  private buildSearchUrl(keyword: string, page = 1): string {
     // Jobsora uses /emplois-{keyword} URL pattern
     const encodedKeyword = keyword.replace(/\s+/g, "-").toLowerCase();
-    return `${this.baseUrl}/emplois-${encodedKeyword}`;
+    const base = `${this.baseUrl}/emplois-${encodedKeyword}`;
+    return page > 1 ? `${base}?page=${page}` : base;
   }
 }

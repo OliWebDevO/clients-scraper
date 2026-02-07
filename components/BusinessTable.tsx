@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   ExternalLink,
   Star,
@@ -32,7 +32,7 @@ interface BusinessTableProps {
   draftStatuses?: Record<string, "none" | "generating" | "done">;
 }
 
-export function BusinessTable({
+export const BusinessTable = React.memo(function BusinessTable({
   businesses,
   selectedIds,
   onSelectionChange,
@@ -427,7 +427,7 @@ export function BusinessTable({
       </div>
     </>
   );
-}
+});
 
 function WebsiteStatusBadge({ business, compact }: { business: Business; compact?: boolean }) {
   // No website = best prospect
