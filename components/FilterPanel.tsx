@@ -55,13 +55,13 @@ export function FilterPanel({
         />
       </div>
 
-      {/* Filters - scrollable on mobile */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 sm:flex-wrap">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
         <Select
           value={filters.investigated || ""}
           onValueChange={(v) => onFilterChange("investigated", v)}
         >
-          <SelectTrigger className="w-[110px] sm:w-[130px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[130px]">
             <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Statut" />
           </SelectTrigger>
@@ -76,7 +76,7 @@ export function FilterPanel({
           value={filters.viable || "not-red"}
           onValueChange={(v) => onFilterChange("viable", v)}
         >
-          <SelectTrigger className="w-[130px] sm:w-[150px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[150px]">
             <ThumbsUp className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Viable" />
           </SelectTrigger>
@@ -93,7 +93,7 @@ export function FilterPanel({
           value={filters.minRating || ""}
           onValueChange={(v) => onFilterChange("minRating", v)}
         >
-          <SelectTrigger className="w-[120px] sm:w-[140px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[140px]">
             <Star className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Rating" />
           </SelectTrigger>
@@ -110,7 +110,7 @@ export function FilterPanel({
           value={filters.category || ""}
           onValueChange={(v) => onFilterChange("category", v)}
         >
-          <SelectTrigger className="w-[140px] sm:w-[160px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[160px]">
             <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Category" />
           </SelectTrigger>
@@ -128,7 +128,7 @@ export function FilterPanel({
           value={filters.hasWebsite || ""}
           onValueChange={(v) => onFilterChange("hasWebsite", v)}
         >
-          <SelectTrigger className="w-[130px] sm:w-[150px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[150px]">
             <SelectValue placeholder="Website" />
           </SelectTrigger>
           <SelectContent>

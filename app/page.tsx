@@ -157,76 +157,76 @@ export default function Dashboard() {
       {/* Quick Actions & Recent Activity */}
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Quick Actions */}
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="h-5 w-5" />
               Quick Actions
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 sm:space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
             <Link href="/clients" className="block">
-              <div className="group flex items-center justify-between rounded-md border border-border p-4 transition-all duration-200 hover:border-primary/50 hover:bg-muted/50">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-500/10">
-                    <Users className="h-5 w-5 text-blue-400" />
+              <div className="group flex items-center justify-between gap-2 sm:gap-3 rounded-md border border-border p-2.5 sm:p-4 transition-all duration-200 hover:border-primary/50 hover:bg-muted/50">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-md bg-blue-500/10 shrink-0">
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
                   </div>
-                  <div>
-                    <p className="font-medium">Find New Clients</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base truncate">Find New Clients</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       Search Google Maps for businesses
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground transition-all duration-200 group-hover:text-foreground group-hover:translate-x-0.5" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 transition-all duration-200 group-hover:text-foreground group-hover:translate-x-0.5" />
               </div>
             </Link>
 
             <Link href="/jobs" className="block">
-              <div className="group flex items-center justify-between rounded-md border border-border p-4 transition-all duration-200 hover:border-primary/50 hover:bg-muted/50">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-green-500/10">
-                    <Briefcase className="h-5 w-5 text-green-400" />
+              <div className="group flex items-center justify-between gap-2 sm:gap-3 rounded-md border border-border p-2.5 sm:p-4 transition-all duration-200 hover:border-primary/50 hover:bg-muted/50">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-md bg-green-500/10 shrink-0">
+                    <Briefcase className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
                   </div>
-                  <div>
-                    <p className="font-medium">Discover Jobs</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base truncate">Discover Jobs</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       Search Belgian job platforms
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground transition-all duration-200 group-hover:text-foreground group-hover:translate-x-0.5" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 transition-all duration-200 group-hover:text-foreground group-hover:translate-x-0.5" />
               </div>
             </Link>
 
             <Link href="/emails" className="block">
-              <div className="group flex items-center justify-between rounded-md border border-border p-4 transition-all duration-200 hover:border-primary/50 hover:bg-muted/50">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-purple-500/10">
-                    <Mail className="h-5 w-5 text-purple-400" />
+              <div className="group flex items-center justify-between gap-2 sm:gap-3 rounded-md border border-border p-2.5 sm:p-4 transition-all duration-200 hover:border-primary/50 hover:bg-muted/50">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-md bg-purple-500/10 shrink-0">
+                    <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" />
                   </div>
-                  <div>
-                    <p className="font-medium">Send Outreach</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm sm:text-base truncate">Send Outreach</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       Create and send email campaigns
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground transition-all duration-200 group-hover:text-foreground group-hover:translate-x-0.5" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 transition-all duration-200 group-hover:text-foreground group-hover:translate-x-0.5" />
               </div>
             </Link>
           </CardContent>
         </Card>
 
         {/* Recent Activity */}
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="h-5 w-5" />
               Recent Activity
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             {loading ? (
               <div className="flex items-center justify-center py-8 text-muted-foreground">
                 Loading...
@@ -240,14 +240,14 @@ export default function Dashboard() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {recentLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
+                    className="flex items-center justify-between gap-2 rounded-md border border-border p-2 sm:p-3"
                   >
-                    <div className="flex items-center gap-3 min-w-0 w-1/2">
-                      <div className="shrink-0 self-start mt-0.5">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                      <div className="shrink-0">
                         {log.type === "businesses" ? (
                           <Users className="h-4 w-4 text-blue-400" />
                         ) : (
@@ -255,7 +255,7 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium capitalize break-words">
+                        <p className="text-xs sm:text-sm font-medium capitalize truncate">
                           {log.type} Search
                           {log.source && ` (${log.source})`}
                         </p>
@@ -264,11 +264,15 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                      <span className="hidden sm:inline text-sm text-muted-foreground whitespace-nowrap">
                         {log.items_found} found
                       </span>
+                      <span className="sm:hidden text-xs text-muted-foreground">
+                        {log.items_found}
+                      </span>
                       <Badge
+                        className="text-[10px] sm:text-xs"
                         variant={
                           log.status === "completed"
                             ? "success"

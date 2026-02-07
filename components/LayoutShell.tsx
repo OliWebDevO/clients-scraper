@@ -27,7 +27,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           collapsed ? "lg:ml-0" : "lg:ml-64"
         )}
       >
-        <div className="p-3 sm:p-6 lg:p-8 w-full max-w-full">
+        <div className="p-3 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           {collapsed && (
             <div className="hidden lg:flex mb-4">
               <Button

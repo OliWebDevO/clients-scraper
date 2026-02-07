@@ -190,7 +190,7 @@ export default function SettingsPage() {
       {/* Schedule Manager */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
@@ -200,12 +200,12 @@ export default function SettingsPage() {
                 Set up automatic searching at regular intervals
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => handleCreate("businesses")}>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="outline" onClick={() => handleCreate("businesses")} className="flex-1 sm:flex-none" size="sm">
                 <Users className="mr-2 h-4 w-4" />
                 Schedule Clients
               </Button>
-              <Button onClick={() => handleCreate("jobs")}>
+              <Button onClick={() => handleCreate("jobs")} className="flex-1 sm:flex-none" size="sm">
                 <Briefcase className="mr-2 h-4 w-4" />
                 Schedule Jobs
               </Button>
@@ -228,17 +228,17 @@ export default function SettingsPage() {
               {schedules.map((schedule) => (
                 <div
                   key={schedule.id}
-                  className="flex items-center justify-between rounded-md border border-border p-4"
+                  className="rounded-md border border-border p-4 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     <Switch
                       checked={schedule.enabled}
                       onCheckedChange={(checked) => handleToggle(schedule.id, checked)}
                     />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">{schedule.name}</p>
-                        <Badge variant={schedule.type === "jobs" ? "secondary" : "outline"}>
+                        <p className="font-medium truncate">{schedule.name}</p>
+                        <Badge variant={schedule.type === "jobs" ? "secondary" : "outline"} className="shrink-0">
                           {schedule.type}
                         </Badge>
                       </div>
@@ -251,8 +251,8 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right text-sm">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 pl-10 sm:pl-0">
+                    <div className="text-left sm:text-right text-sm">
                       <p className="text-muted-foreground">
                         Next: {schedule.next_run_at ? formatRelativeTime(schedule.next_run_at) : "N/A"}
                       </p>
@@ -262,7 +262,7 @@ export default function SettingsPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 shrink-0">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(schedule)}>
                         <Edit2 className="h-4 w-4" />
                       </Button>

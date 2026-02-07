@@ -430,67 +430,70 @@ export default function EmailsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Email Templates</h1>
-          <p className="mt-1 text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Email Templates</h1>
+          <p className="mt-1 text-sm sm:text-base text-muted-foreground">
             Create and manage email templates for outreach
           </p>
         </div>
-        <Button onClick={handleCreate}>
+        <Button onClick={handleCreate} size="sm" className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           New Template
         </Button>
       </div>
 
       {/* My Documents */}
-      <Card>
-        <CardHeader>
+      <Card className="overflow-hidden">
+        <CardHeader className="p-4 sm:p-6">
           <CardTitle className="flex items-center gap-2">
             <File className="h-5 w-5" />
             My Documents
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
             {/* CV Upload */}
-            <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">CV / Resume</h3>
                 <Badge variant="outline" className="text-xs">PDF</Badge>
               </div>
 
               {cvDoc ? (
-                <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
-                  <FileText className="h-8 w-8 text-red-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{cvDoc.filename}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(cvDoc.file_size)} &middot; {formatRelativeTime(cvDoc.updated_at)}
-                    </p>
+                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <FileText className="h-8 w-8 text-red-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{cvDoc.filename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(cvDoc.file_size)} &middot; {formatRelativeTime(cvDoc.updated_at)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex gap-1 border-t border-border/50 pt-1.5">
                     {cvDoc.url && isPdf(cvDoc.filename) && (
                       <a href={cvDoc.url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon" title="View">
-                          <Eye className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
+                          <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </a>
                     )}
                     {cvDoc.download_url && (
                       <a href={cvDoc.download_url}>
-                        <Button variant="ghost" size="icon" title="Download">
-                          <Download className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Download">
+                          <Download className="h-3.5 w-3.5" />
                         </Button>
                       </a>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
                       onClick={() => handleDeleteDocument(cvDoc.id)}
                       title="Delete"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -525,43 +528,46 @@ export default function EmailsPage() {
             </div>
 
             {/* Cover Letter Upload */}
-            <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Cover Letter</h3>
                 <Badge variant="outline" className="text-xs">PDF, DOCX, ODT</Badge>
               </div>
 
               {coverLetterDoc ? (
-                <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
-                  <FileText className="h-8 w-8 text-blue-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{coverLetterDoc.filename}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(coverLetterDoc.file_size)} &middot; {formatRelativeTime(coverLetterDoc.updated_at)}
-                    </p>
+                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <FileText className="h-8 w-8 text-blue-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{coverLetterDoc.filename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(coverLetterDoc.file_size)} &middot; {formatRelativeTime(coverLetterDoc.updated_at)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex gap-1 border-t border-border/50 pt-1.5">
                     {coverLetterDoc.url && isPdf(coverLetterDoc.filename) && (
                       <a href={coverLetterDoc.url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon" title="View">
-                          <Eye className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
+                          <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </a>
                     )}
                     {coverLetterDoc.download_url && (
                       <a href={coverLetterDoc.download_url}>
-                        <Button variant="ghost" size="icon" title="Download">
-                          <Download className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Download">
+                          <Download className="h-3.5 w-3.5" />
                         </Button>
                       </a>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
                       onClick={() => handleDeleteDocument(coverLetterDoc.id)}
                       title="Delete"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -596,43 +602,46 @@ export default function EmailsPage() {
             </div>
 
             {/* Proposal Template Upload */}
-            <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="rounded-lg border border-border p-3 sm:p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Client Proposal</h3>
                 <Badge variant="outline" className="text-xs">PDF, DOCX, TXT</Badge>
               </div>
 
               {proposalDoc ? (
-                <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
-                  <Mail className="h-8 w-8 text-green-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{proposalDoc.filename}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(proposalDoc.file_size)} &middot; {formatRelativeTime(proposalDoc.updated_at)}
-                    </p>
+                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Mail className="h-8 w-8 text-green-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{proposalDoc.filename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(proposalDoc.file_size)} &middot; {formatRelativeTime(proposalDoc.updated_at)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex gap-1 border-t border-border/50 pt-1.5">
                     {proposalDoc.url && isPdf(proposalDoc.filename) && (
                       <a href={proposalDoc.url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon" title="View">
-                          <Eye className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
+                          <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </a>
                     )}
                     {proposalDoc.download_url && (
                       <a href={proposalDoc.download_url}>
-                        <Button variant="ghost" size="icon" title="Download">
-                          <Download className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Download">
+                          <Download className="h-3.5 w-3.5" />
                         </Button>
                       </a>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-7 w-7"
                       onClick={() => handleDeleteDocument(proposalDoc.id)}
                       title="Delete"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -671,25 +680,25 @@ export default function EmailsPage() {
 
       {/* Drafted Jobs */}
       {drafts.length > 0 && (
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center gap-2">
               <Briefcase className="h-5 w-5" />
               Drafted Jobs
               <Badge variant="secondary" className="ml-2">{drafts.length}</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="space-y-4">
               {drafts.map((draft) => (
                 <div
                   key={draft.id}
-                  className="rounded-lg border border-border p-4 space-y-3"
+                  className="rounded-lg border border-border p-3 sm:p-4 space-y-3"
                 >
                   {/* Job info */}
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-medium truncate">{draft.job_title}</h3>
+                      <h3 className="font-medium text-sm sm:text-base truncate">{draft.job_title}</h3>
                       <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground">
                         <Building2 className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{draft.job_company}</span>
@@ -701,31 +710,33 @@ export default function EmailsPage() {
                   </div>
 
                   {/* Documents grid: CV + Cover Letter */}
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:gap-3 sm:grid-cols-2">
                     {/* CV */}
-                    <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
-                      <FileText className="h-7 w-7 text-red-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-muted-foreground">CV</p>
-                        <p className="text-sm font-medium truncate">{draft.cv_filename || "CV.pdf"}</p>
-                        {draft.cv_file_size && (
-                          <p className="text-xs text-muted-foreground">
-                            {(draft.cv_file_size / 1024).toFixed(1)} KB
-                          </p>
-                        )}
+                    <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <FileText className="h-7 w-7 text-red-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-muted-foreground">CV</p>
+                          <p className="text-sm font-medium truncate">{draft.cv_filename || "CV.pdf"}</p>
+                          {draft.cv_file_size && (
+                            <p className="text-xs text-muted-foreground">
+                              {(draft.cv_file_size / 1024).toFixed(1)} KB
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex gap-1 shrink-0">
+                      <div className="flex gap-1 border-t border-border/50 pt-1.5">
                         {draft.cv_url && (
                           <a href={draft.cv_url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="icon" title="View CV">
-                              <Eye className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="View CV">
+                              <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </a>
                         )}
                         {draft.cv_download_url && (
                           <a href={draft.cv_download_url}>
-                            <Button variant="ghost" size="icon" title="Download CV">
-                              <Download className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Download CV">
+                              <Download className="h-3.5 w-3.5" />
                             </Button>
                           </a>
                         )}
@@ -733,29 +744,31 @@ export default function EmailsPage() {
                     </div>
 
                     {/* Cover Letter */}
-                    <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
-                      <FileText className="h-7 w-7 text-blue-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-muted-foreground">Lettre de motivation</p>
-                        <p className="text-sm font-medium truncate">{draft.filename}</p>
-                        {draft.file_size && (
-                          <p className="text-xs text-muted-foreground">
-                            {(draft.file_size / 1024).toFixed(1)} KB
-                          </p>
-                        )}
+                    <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <FileText className="h-7 w-7 text-blue-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-muted-foreground">Lettre de motivation</p>
+                          <p className="text-sm font-medium truncate">{draft.filename}</p>
+                          {draft.file_size && (
+                            <p className="text-xs text-muted-foreground">
+                              {(draft.file_size / 1024).toFixed(1)} KB
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex gap-1 shrink-0">
+                      <div className="flex gap-1 border-t border-border/50 pt-1.5">
                         {draft.view_url && draft.filename && isPdf(draft.filename) && (
                           <a href={draft.view_url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="icon" title="View Cover Letter">
-                              <Eye className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="View Cover Letter">
+                              <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </a>
                         )}
                         {draft.download_url && (
                           <a href={draft.download_url}>
-                            <Button variant="ghost" size="icon" title="Download Cover Letter">
-                              <Download className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Download Cover Letter">
+                              <Download className="h-3.5 w-3.5" />
                             </Button>
                           </a>
                         )}
@@ -764,51 +777,54 @@ export default function EmailsPage() {
                   </div>
 
                   {/* Final Version */}
-                  <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+                  <div className="rounded-md border border-dashed border-border p-2 sm:p-3 space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
                     {draft.final_storage_path ? (
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-7 w-7 text-green-500 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{draft.final_filename}</p>
-                          {draft.final_file_size && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatFileSize(draft.final_file_size)}
-                            </p>
-                          )}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <FileText className="h-7 w-7 text-green-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{draft.final_filename}</p>
+                            {draft.final_file_size && (
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(draft.final_file_size)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
+                        <div className="flex gap-1 border-t border-border/50 pt-1.5">
                           {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
                             <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
-                              <Button variant="ghost" size="icon" title="Voir">
-                                <Eye className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Voir">
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                             </a>
                           )}
                           {draft.final_download_url && (
                             <a href={draft.final_download_url}>
-                              <Button variant="ghost" size="icon" title="Telecharger">
-                                <Download className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Telecharger">
+                                <Download className="h-3.5 w-3.5" />
                               </Button>
                             </a>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-7 w-7"
                             title="Remplacer"
                             onClick={() => finalUploadRefs.current[draft.id]?.click()}
                             disabled={uploadingFinalDraftId === draft.id}
                           >
-                            <Upload className="h-4 w-4" />
+                            <Upload className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             title="Supprimer"
                             onClick={() => handleDeleteFinal(draft.id)}
-                            className="text-destructive hover:text-destructive"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                         <input
@@ -863,25 +879,25 @@ export default function EmailsPage() {
 
       {/* Drafted Clients */}
       {businessDrafts.length > 0 && (
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
               Drafted Clients
               <Badge variant="secondary" className="ml-2">{businessDrafts.length}</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="space-y-4">
               {businessDrafts.map((draft) => (
                 <div
                   key={draft.id}
-                  className="rounded-lg border border-border p-4 space-y-3"
+                  className="rounded-lg border border-border p-3 sm:p-4 space-y-3"
                 >
                   {/* Business info */}
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-medium truncate">{draft.business_name}</h3>
+                      <h3 className="font-medium text-sm sm:text-base truncate">{draft.business_name}</h3>
                       {draft.business_category && (
                         <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground">
                           <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -895,22 +911,24 @@ export default function EmailsPage() {
                   </div>
 
                   {/* Proposal document */}
-                  <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
-                    <FileText className="h-7 w-7 text-green-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-muted-foreground">Proposition</p>
-                      <p className="text-sm font-medium truncate">{draft.filename}</p>
-                      {draft.file_size && (
-                        <p className="text-xs text-muted-foreground">
-                          {(draft.file_size / 1024).toFixed(1)} KB
-                        </p>
-                      )}
+                  <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <FileText className="h-7 w-7 text-green-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-muted-foreground">Proposition</p>
+                        <p className="text-sm font-medium truncate">{draft.filename}</p>
+                        {draft.file_size && (
+                          <p className="text-xs text-muted-foreground">
+                            {(draft.file_size / 1024).toFixed(1)} KB
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <div className="flex gap-1 border-t border-border/50 pt-1.5">
                       {draft.download_url && (
                         <a href={draft.download_url}>
-                          <Button variant="ghost" size="icon" title="Download Proposal">
-                            <Download className="h-4 w-4" />
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Download Proposal">
+                            <Download className="h-3.5 w-3.5" />
                           </Button>
                         </a>
                       )}
@@ -918,51 +936,54 @@ export default function EmailsPage() {
                   </div>
 
                   {/* Final Version */}
-                  <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+                  <div className="rounded-md border border-dashed border-border p-2 sm:p-3 space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
                     {draft.final_storage_path ? (
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-7 w-7 text-green-500 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{draft.final_filename}</p>
-                          {draft.final_file_size && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatFileSize(draft.final_file_size)}
-                            </p>
-                          )}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <FileText className="h-7 w-7 text-green-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{draft.final_filename}</p>
+                            {draft.final_file_size && (
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(draft.final_file_size)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
+                        <div className="flex gap-1 border-t border-border/50 pt-1.5">
                           {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
                             <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
-                              <Button variant="ghost" size="icon" title="Voir">
-                                <Eye className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Voir">
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                             </a>
                           )}
                           {draft.final_download_url && (
                             <a href={draft.final_download_url}>
-                              <Button variant="ghost" size="icon" title="Telecharger">
-                                <Download className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Telecharger">
+                                <Download className="h-3.5 w-3.5" />
                               </Button>
                             </a>
                           )}
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-7 w-7"
                             title="Remplacer"
                             onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
                             disabled={uploadingFinalBusinessDraftId === draft.id}
                           >
-                            <Upload className="h-4 w-4" />
+                            <Upload className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             title="Supprimer"
                             onClick={() => handleDeleteBusinessFinal(draft.id)}
-                            className="text-destructive hover:text-destructive"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                         <input
@@ -1009,11 +1030,11 @@ export default function EmailsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full"
+                      className="w-full min-w-0"
                       onClick={() => handleSendEmailToBusiness(draft.business, draft.id)}
                     >
-                      <Send className="mr-2 h-4 w-4" />
-                      Envoyer un mail a {draft.business_name}
+                      <Send className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">Envoyer un mail a {draft.business_name}</span>
                     </Button>
                   )}
 
@@ -1029,66 +1050,63 @@ export default function EmailsPage() {
       )}
 
       {/* Templates Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-wrap gap-4">
         {loading ? (
           <p className="text-muted-foreground">Loading...</p>
-        ) : templates.length === 0 ? (
-          <Card className="col-span-full">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="mb-4 h-12 w-12 text-muted-foreground/30" />
-              <p className="text-lg font-medium text-muted-foreground">No templates yet</p>
-              <p className="text-sm text-muted-foreground/70">
-                Create your first email template to get started
-              </p>
-              <Button className="mt-4" onClick={handleCreate}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Template
-              </Button>
-            </CardContent>
-          </Card>
         ) : (
-          templates.map((template) => (
-            <Card key={template.id} className="group">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {template.name}
-                      {template.is_default && (
-                        <Badge variant="secondary" className="gap-1">
-                          <Star className="h-3 w-3" />
-                          Default
-                        </Badge>
-                      )}
-                    </CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Subject: {template.subject}
-                    </p>
+          <>
+            {templates.map((template) => (
+              <Card key={template.id} className="group w-full md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)] overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="flex items-center gap-2">
+                        <span className="truncate">{template.name}</span>
+                        {template.is_default && (
+                          <Badge variant="secondary" className="gap-1 shrink-0">
+                            <Star className="h-3 w-3" />
+                            Default
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground truncate">
+                        Subject: {template.subject}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(template)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(template.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(template)}>
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(template.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="line-clamp-3 text-sm text-muted-foreground">
-                  {template.body}
-                </p>
-                <p className="mt-3 text-xs text-muted-foreground/70">
-                  Updated {formatRelativeTime(template.updated_at)}
-                </p>
+                </CardHeader>
+                <CardContent>
+                  <p className="line-clamp-3 text-sm text-muted-foreground break-words">
+                    {template.body}
+                  </p>
+                  <p className="mt-3 text-xs text-muted-foreground/70">
+                    Updated {formatRelativeTime(template.updated_at)}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+            <Card
+              className="w-full md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)] cursor-pointer border-dashed hover:border-foreground/30 transition-colors"
+              onClick={handleCreate}
+            >
+              <CardContent className="flex flex-col items-center justify-center h-full py-12">
+                <Plus className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-muted-foreground">New Template</p>
               </CardContent>
             </Card>
-          ))
+          </>
         )}
       </div>
 
@@ -1110,18 +1128,18 @@ export default function EmailsPage() {
               {sentEmails.map((email) => (
                 <div
                   key={email.id}
-                  className="flex items-center justify-between rounded-md border border-border p-3"
+                  className="rounded-md border border-border p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3"
                 >
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">{email.subject}</p>
-                      <p className="text-xs text-muted-foreground">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{email.subject}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         To: {email.recipient_email}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 pl-7 sm:pl-0 shrink-0">
                     <Badge
                       variant={
                         email.status === "sent"
@@ -1133,7 +1151,7 @@ export default function EmailsPage() {
                     >
                       {email.status}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {formatRelativeTime(email.sent_at)}
                     </span>
                   </div>

@@ -159,7 +159,7 @@ export function JobTable({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 pt-2 border-t border-border overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
               {/* Vu checkbox */}
               <div className="flex items-center gap-1.5">
                 <button
@@ -197,28 +197,28 @@ export function JobTable({
                 <span className="text-xs text-muted-foreground">Viable</span>
               </div>
               <div className="flex-1" />
-              {onDraft && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onDraft(job)}
-                  disabled={draftStatuses[job.id] === "generating"}
-                  className="shrink-0"
-                >
-                  {draftStatuses[job.id] === "generating" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileText className={`mr-2 h-4 w-4 ${draftStatuses[job.id] === "done" ? "text-blue-500" : ""}`} />
-                  )}
-                  Draft
-                </Button>
-              )}
-              <a href={job.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                <Button variant="outline" size="sm">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  View Job
-                </Button>
-              </a>
+              <div className="flex items-center gap-1.5">
+                {onDraft && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onDraft(job)}
+                    disabled={draftStatuses[job.id] === "generating"}
+                    className="shrink-0 px-2.5"
+                  >
+                    {draftStatuses[job.id] === "generating" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className={`h-4 w-4 ${draftStatuses[job.id] === "done" ? "text-blue-500" : ""}`} />
+                    )}
+                  </Button>
+                )}
+                <a href={job.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                  <Button variant="outline" size="sm" className="px-2.5">
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </a>
+              </div>
             </div>
           </div>
         ))}

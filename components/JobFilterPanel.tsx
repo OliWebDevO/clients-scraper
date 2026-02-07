@@ -52,13 +52,13 @@ export function JobFilterPanel({
         />
       </div>
 
-      {/* Filters - scrollable on mobile */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 sm:flex-wrap">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
         <Select
           value={filters.investigated || ""}
           onValueChange={(v) => onFilterChange("investigated", v)}
         >
-          <SelectTrigger className="w-[110px] sm:w-[130px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[130px]">
             <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Statut" />
           </SelectTrigger>
@@ -73,7 +73,7 @@ export function JobFilterPanel({
           value={filters.viable || "not-red"}
           onValueChange={(v) => onFilterChange("viable", v)}
         >
-          <SelectTrigger className="w-[130px] sm:w-[150px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[150px]">
             <ThumbsUp className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Viable" />
           </SelectTrigger>
@@ -90,7 +90,7 @@ export function JobFilterPanel({
           value={filters.source || ""}
           onValueChange={(v) => onFilterChange("source", v)}
         >
-          <SelectTrigger className="w-[120px] sm:w-[140px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[140px]">
             <SelectValue placeholder="Source" />
           </SelectTrigger>
           <SelectContent>
@@ -107,7 +107,7 @@ export function JobFilterPanel({
           value={filters.keyword || ""}
           onValueChange={(v) => onFilterChange("keyword", v)}
         >
-          <SelectTrigger className="w-[140px] sm:w-[180px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[180px]">
             <Tag className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Keyword" />
           </SelectTrigger>
@@ -125,7 +125,7 @@ export function JobFilterPanel({
           value={filters.dateRange || ""}
           onValueChange={(v) => onFilterChange("dateRange", v)}
         >
-          <SelectTrigger className="w-[120px] sm:w-[140px] shrink-0">
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[140px]">
             <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Date" />
           </SelectTrigger>

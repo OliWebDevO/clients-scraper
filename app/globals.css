@@ -84,12 +84,6 @@ html, body {
   outline-offset: 2px;
 }
 
-/* Smooth animations */
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
 
 /* Table styles */
 table {

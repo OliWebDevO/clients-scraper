@@ -140,7 +140,7 @@ export function BusinessTable({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-3 pt-2 border-t border-border overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
               {/* Vu checkbox */}
               <div className="flex items-center gap-1.5">
                 <button
@@ -178,45 +178,45 @@ export function BusinessTable({
                 <span className="text-xs text-muted-foreground">Viable</span>
               </div>
               <div className="flex-1" />
-              {onDraft && (
+              <div className="flex items-center gap-1.5">
+                {onDraft && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onDraft(business)}
+                    disabled={draftStatuses[business.id] === "generating"}
+                    className="shrink-0 px-2.5"
+                  >
+                    {draftStatuses[business.id] === "generating" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className={`h-4 w-4 ${draftStatuses[business.id] === "done" ? "text-blue-500" : ""}`} />
+                    )}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => onDraft(business)}
-                  disabled={draftStatuses[business.id] === "generating"}
-                  className="shrink-0"
+                  onClick={() => onSendEmail(business)}
+                  className="shrink-0 px-2.5"
                 >
-                  {draftStatuses[business.id] === "generating" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileText className={`mr-2 h-4 w-4 ${draftStatuses[business.id] === "done" ? "text-blue-500" : ""}`} />
-                  )}
-                  Draft
+                  <Mail className="h-4 w-4" />
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onSendEmail(business)}
-                className="flex-1 min-w-0"
-              >
-                <Mail className="mr-1 h-4 w-4 shrink-0" />
-                <span className="truncate">Email</span>
-              </Button>
-              {business.website_url && (
-                <a href={business.website_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                  <Button variant="outline" size="sm" className="px-2">
-                    <Globe className="h-4 w-4" />
-                  </Button>
-                </a>
-              )}
-              {business.google_maps_url && (
-                <a href={business.google_maps_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                  <Button variant="outline" size="sm" className="px-2">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </a>
-              )}
+                {business.website_url && (
+                  <a href={business.website_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <Button variant="outline" size="sm" className="px-2.5">
+                      <Globe className="h-4 w-4" />
+                    </Button>
+                  </a>
+                )}
+                {business.google_maps_url && (
+                  <a href={business.google_maps_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <Button variant="outline" size="sm" className="px-2.5">
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         ))}
