@@ -169,14 +169,43 @@ CREATE INDEX IF NOT EXISTS idx_sent_emails_status ON sent_emails(status);
 CREATE INDEX IF NOT EXISTS idx_businesses_viable_created ON businesses(viable, created_at);
 CREATE INDEX IF NOT EXISTS idx_app_users_email ON app_users(email);
 
--- Enable Row Level Security (optional, for production)
--- ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE scrape_logs ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE scrape_schedules ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE sent_emails ENABLE ROW LEVEL SECURITY;
+-- =============================================================
+-- Row Level Security (RLS)
+-- =============================================================
+-- Enable RLS on ALL tables. The service_role key (used server-side)
+-- bypasses RLS automatically. Policies below grant full access to
+-- the anon role so the existing client-side Supabase calls keep
+-- working. Tighten these policies later when migrating all
+-- client calls to server-side API routes.
+-- =============================================================
 
--- Create policies (if using RLS with service role)
--- For this app, we use service role key which bypasses RLS
+ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scrape_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scrape_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sent_emails ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE business_drafts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
+
+-- Permissive policies for the anon role (single-user app, protected by middleware auth)
+-- These allow the anon key to continue working. Replace with stricter
+-- policies (e.g. require a custom JWT claim) when ready.
+
+CREATE POLICY "anon_all_businesses" ON businesses FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_jobs" ON jobs FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_scrape_logs" ON scrape_logs FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_scrape_schedules" ON scrape_schedules FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_settings" ON settings FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_email_templates" ON email_templates FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_sent_emails" ON sent_emails FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_user_documents" ON user_documents FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_job_drafts" ON job_drafts FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_business_drafts" ON business_drafts FOR ALL TO anon USING (true) WITH CHECK (true);
+-- DENY all access for anon to app_users (contains password hashes)
+-- Use service_role key server-side to access this table
+DROP POLICY IF EXISTS "anon_all_app_users" ON app_users;
+CREATE POLICY "deny_anon_app_users" ON app_users FOR ALL TO anon USING (false) WITH CHECK (false);

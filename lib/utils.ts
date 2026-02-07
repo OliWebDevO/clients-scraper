@@ -76,6 +76,22 @@ export function replaceTemplateVariables(
   return result;
 }
 
+/**
+ * Re-apply the blank line spacing pattern from the original text onto the AI-generated text.
+ * The AI often collapses multiple blank lines into single ones - this restores the original layout.
+ */
+export function reapplySpacing(original: string, generated: string): string {
+  const originalGaps = original.match(/\n{2,}/g) || [];
+
+  let gapIndex = 0;
+  return generated.replace(/\n{2,}/g, () => {
+    if (gapIndex < originalGaps.length) {
+      return originalGaps[gapIndex++];
+    }
+    return "\n\n";
+  });
+}
+
 export function exportToCSV<T extends Record<string, unknown>>(
   data: T[],
   filename: string

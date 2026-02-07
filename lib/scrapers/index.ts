@@ -7,8 +7,10 @@ import { LinkedInScraper } from "./linkedin";
 import type { JobPlatform } from "@/lib/types";
 import type { ScraperResult } from "./base";
 
-interface Scraper {
+export interface Scraper {
   scrape(keywords: string[], location?: string, page?: number): Promise<ScraperResult>;
+  setKeepAlive?(value: boolean): Scraper;
+  close?(): Promise<void>;
 }
 
 export function getScraperForPlatform(platform: JobPlatform): Scraper {

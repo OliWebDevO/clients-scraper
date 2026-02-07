@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
 import { expandKeywords } from "@/lib/scrapers/base";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 import type { JobPlatform, Job } from "@/lib/types";
 
 export const maxDuration = 300; // 5 minutes max for Vercel
@@ -13,6 +14,11 @@ interface ScrapeJobsRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("scrape-jobs", 5, 60 * 1000, clientIp)) {
+    return NextResponse.json({ success: false, error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const body: ScrapeJobsRequest = await request.json();
     const { platforms, location } = body;
@@ -74,29 +80,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Insert jobs into database (upsert to avoid duplicates)
+    // Insert jobs into database in batches (upsert to avoid duplicates)
     let insertedCount = 0;
+    const buffer: Record<string, unknown>[] = [];
+
     for (const job of allJobs) {
       if (!job.url || !job.title) continue;
 
-      const { error } = await supabase.from("jobs").upsert(
-        {
-          title: job.title,
-          company: job.company || null,
-          location: job.location || null,
-          salary: job.salary || null,
-          description: job.description || null,
-          url: job.url,
-          source: job.source || "unknown",
-          keywords_matched: job.keywords_matched || [],
-          posted_at: job.posted_at || null,
-        },
-        { onConflict: "url" }
-      );
+      buffer.push({
+        title: job.title,
+        company: job.company || null,
+        location: job.location || null,
+        salary: job.salary || null,
+        description: job.description || null,
+        url: job.url,
+        source: job.source || "unknown",
+        keywords_matched: job.keywords_matched || [],
+        posted_at: job.posted_at || null,
+      });
 
-      if (!error) {
-        insertedCount++;
+      if (buffer.length >= 25) {
+        const { error } = await supabase.from("jobs").upsert(buffer, { onConflict: "url" });
+        if (!error) insertedCount += buffer.length;
+        buffer.length = 0;
       }
+    }
+
+    if (buffer.length > 0) {
+      const { error } = await supabase.from("jobs").upsert(buffer, { onConflict: "url" });
+      if (!error) insertedCount += buffer.length;
     }
 
     // Update scrape log
@@ -125,7 +137,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "An internal error occurred",
       },
       { status: 500 }
     );

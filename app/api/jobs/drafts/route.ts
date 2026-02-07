@@ -8,9 +8,10 @@ export async function GET() {
 
     const { data: draftsData, error } = await supabase
       .from("job_drafts")
-      .select("*")
+      .select("id, job_id, storage_path, filename, file_size, job_description_text, ai_model, status, error_message, final_storage_path, final_filename, final_file_size, created_at")
       .eq("status", "completed")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(50);
 
     if (error) throw error;
     if (!draftsData || draftsData.length === 0) {
@@ -32,7 +33,7 @@ export async function GET() {
     // Get the user's CV
     const { data: cvDocData } = await supabase
       .from("user_documents")
-      .select("*")
+      .select("filename, storage_path, file_size")
       .eq("type", "cv")
       .single();
 
@@ -41,21 +42,21 @@ export async function GET() {
     let cvFilename: string | null = null;
     let cvFileSize: number | null = null;
     if (cvDocData?.storage_path) {
-      const { data: cvViewData } = await supabase.storage
-        .from("documents")
-        .createSignedUrl(cvDocData.storage_path, 3600);
-      cvUrl = cvViewData?.signedUrl || null;
-      const { data: cvDlData } = await supabase.storage
-        .from("documents")
-        .createSignedUrl(cvDocData.storage_path, 3600, { download: cvDocData.filename });
-      cvDownloadUrl = cvDlData?.signedUrl || null;
       cvFilename = cvDocData.filename;
       cvFileSize = cvDocData.file_size;
     }
 
-    // Batch all signed URL requests
+    // Batch all signed URL requests (including CV)
     const storagePaths: { path: string; download?: string }[] = [];
     const pathIndexMap: { draftIdx: number; field: string }[] = [];
+
+    // Add CV signed URLs to the batch (-1 means CV, not a draft)
+    if (cvDocData?.storage_path) {
+      pathIndexMap.push({ draftIdx: -1, field: "cv_url" });
+      storagePaths.push({ path: cvDocData.storage_path });
+      pathIndexMap.push({ draftIdx: -1, field: "cv_download_url" });
+      storagePaths.push({ path: cvDocData.storage_path, download: cvDocData.filename });
+    }
 
     draftsData.forEach((draft: JobDraft, i: number) => {
       if (draft.storage_path) {
@@ -80,13 +81,18 @@ export async function GET() {
       )
     );
 
-    // Build URL maps per draft
+    // Build URL maps per draft (and CV at index -1)
     const draftUrls: Record<number, Record<string, string | null>> = {};
     signedUrlResults.forEach((result, i) => {
       const { draftIdx, field } = pathIndexMap[i];
       if (!draftUrls[draftIdx]) draftUrls[draftIdx] = {};
       draftUrls[draftIdx][field] = result.data?.signedUrl || null;
     });
+
+    // Extract CV URLs from batch results
+    const cvUrls = draftUrls[-1] || {};
+    cvUrl = cvUrls.cv_url || null;
+    cvDownloadUrl = cvUrls.cv_download_url || null;
 
     const enrichedDrafts = draftsData.map((draft: JobDraft, i: number) => {
       const job = jobMap.get(draft.job_id);
@@ -108,8 +114,9 @@ export async function GET() {
 
     return NextResponse.json({ data: enrichedDrafts });
   } catch (error) {
+    console.error("Failed to fetch drafts:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch drafts" },
+      { error: "Failed to fetch drafts" },
       { status: 500 }
     );
   }

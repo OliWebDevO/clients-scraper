@@ -1,19 +1,34 @@
 const hits = new Map<string, { count: number; resetAt: number }>();
 
 /**
+ * Extract a client identifier from a request for per-IP rate limiting.
+ */
+export function getClientIdentifier(request: { headers: { get(name: string): string | null } }): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    // x-forwarded-for can contain multiple IPs; the first is the client
+    return forwarded.split(",")[0].trim();
+  }
+  return request.headers.get("x-real-ip") || "unknown";
+}
+
+/**
  * Simple in-memory rate limiter.
  * Returns true if the request should be BLOCKED.
+ * When an identifier is provided, the rate limit is scoped per identifier (e.g. per IP).
  */
 export function isRateLimited(
   key: string,
   maxRequests: number,
-  windowMs: number
+  windowMs: number,
+  identifier?: string
 ): boolean {
+  const effectiveKey = identifier ? `${key}:${identifier}` : key;
   const now = Date.now();
-  const entry = hits.get(key);
+  const entry = hits.get(effectiveKey);
 
   if (!entry || now > entry.resetAt) {
-    hits.set(key, { count: 1, resetAt: now + windowMs });
+    hits.set(effectiveKey, { count: 1, resetAt: now + windowMs });
     return false;
   }
 

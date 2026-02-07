@@ -4,34 +4,18 @@ import { scrapeJobDescription } from "@/lib/job-description-scraper";
 import { downloadAndParseDocument } from "@/lib/document-parser";
 import { customizeCoverLetter } from "@/lib/ai-customize";
 import { generateDocx } from "@/lib/docx-generator";
-import { isRateLimited } from "@/lib/rate-limit";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
+import { reapplySpacing } from "@/lib/utils";
 
 export const maxDuration = 120; // 2 minutes max
-
-/**
- * Re-apply the blank line spacing pattern from the original text onto the AI-generated text.
- * The AI often collapses multiple blank lines into single ones - this restores the original layout.
- */
-function reapplySpacing(original: string, generated: string): string {
-  // Extract all newline gaps from the original (groups of 2+ consecutive newlines)
-  const originalGaps = original.match(/\n{2,}/g) || [];
-
-  // Replace each gap in the generated text with the corresponding original gap
-  let gapIndex = 0;
-  return generated.replace(/\n{2,}/g, () => {
-    if (gapIndex < originalGaps.length) {
-      return originalGaps[gapIndex++];
-    }
-    return "\n\n";
-  });
-}
 
 interface DraftRequest {
   jobId: string;
 }
 
 export async function POST(request: NextRequest) {
-  if (isRateLimited("draft-job", 10, 60 * 1000)) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("draft-job", 10, 60 * 1000, clientIp)) {
     return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
   }
 
@@ -41,6 +25,14 @@ export async function POST(request: NextRequest) {
   if (!jobId) {
     return new Response(
       JSON.stringify({ error: "No jobId specified" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(jobId)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid ID format" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -64,7 +56,7 @@ export async function POST(request: NextRequest) {
 
         const { data: job, error: jobError } = await supabase
           .from("jobs")
-          .select("*")
+          .select("id, title, company, description, url")
           .eq("id", jobId)
           .single();
 
@@ -116,7 +108,8 @@ export async function POST(request: NextRequest) {
         // Get user documents
         const { data: documents, error: docsError } = await supabase
           .from("user_documents")
-          .select("*");
+          .select("id, type, storage_path, mime_type")
+          .in("type", ["cv", "cover_letter"]);
 
         if (docsError) {
           throw new Error("Impossible de charger les documents");
@@ -134,19 +127,14 @@ export async function POST(request: NextRequest) {
 
         sendEvent("progress", {
           progress: 40,
-          message: "Extraction du texte du CV...",
+          message: "Extraction des documents (CV + lettre)...",
           phase: "reading_documents",
         });
 
-        const cvResult = await downloadAndParseDocument(cvDoc.storage_path, cvDoc.mime_type);
-
-        sendEvent("progress", {
-          progress: 45,
-          message: "Extraction du texte de la lettre de motivation...",
-          phase: "reading_documents",
-        });
-
-        const coverLetterResult = await downloadAndParseDocument(coverLetterDoc.storage_path, coverLetterDoc.mime_type);
+        const [cvResult, coverLetterResult] = await Promise.all([
+          downloadAndParseDocument(cvDoc.storage_path, cvDoc.mime_type),
+          downloadAndParseDocument(coverLetterDoc.storage_path, coverLetterDoc.mime_type),
+        ]);
 
         const cvText = cvResult.text;
         const coverLetterText = coverLetterResult.text;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { BusinessTable } from "@/components/BusinessTable";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -16,6 +16,11 @@ import { supabase } from "@/lib/supabase";
 import type { Business, DraftProgressUpdate } from "@/lib/types";
 import { exportToCSV } from "@/lib/utils";
 import { Play, Download, Mail, Users, RefreshCw } from "lucide-react";
+
+/** Escape special characters in a search string for use inside Supabase `.or()` / `.ilike()` */
+function sanitizeSearch(raw: string): string {
+  return raw.replace(/[%_\\]/g, (c) => `\\${c}`);
+}
 
 export default function ClientsPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -42,6 +47,9 @@ export default function ClientsPage() {
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftStatuses, setDraftStatuses] = useState<Record<string, "none" | "generating" | "done">>({});
 
+  // All categories (fetched once from full table)
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
@@ -56,17 +64,83 @@ export default function ClientsPage() {
 
   const PAGE_SIZE = 50;
 
-  const fetchBusinesses = async (p = page) => {
+  // Debounced search term for the actual query
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 350);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchTerm]);
+
+  const fetchBusinesses = useCallback(async (p: number) => {
     setLoading(true);
     const from = p * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const { data, error, count } = await supabase
+
+    let query = supabase
       .from("businesses")
-      .select("id,name,address,phone,rating,review_count,category,google_maps_url,has_website,website_url,website_score,website_issues,location_query,investigated,viable,created_at,updated_at", { count: "exact" })
+      .select("id,name,address,phone,rating,review_count,category,google_maps_url,has_website,website_url,website_score,website_issues,location_query,investigated,viable,created_at,updated_at", { count: "exact" });
+
+    // --- Server-side filters ---
+
+    // Always hide businesses with good websites (score < 25)
+    query = query.or("has_website.eq.false,website_score.is.null,website_score.gte.25");
+
+    // Search
+    if (debouncedSearch) {
+      const s = sanitizeSearch(debouncedSearch);
+      query = query.or(`name.ilike.%${s}%,address.ilike.%${s}%,category.ilike.%${s}%`);
+    }
+
+    // Category
+    if (filters.category && filters.category !== "all") {
+      query = query.eq("category", filters.category);
+    }
+
+    // Min rating
+    if (filters.minRating && filters.minRating !== "all") {
+      query = query.gte("rating", parseFloat(filters.minRating));
+    }
+
+    // Investigated
+    if (filters.investigated && filters.investigated !== "all") {
+      query = query.eq("investigated", filters.investigated === "yes");
+    }
+
+    // Viable
+    if (filters.viable) {
+      if (filters.viable === "not-red") {
+        // Hide non-viable (false), show viable (true) and undecided (null)
+        query = query.or("viable.eq.true,viable.is.null");
+      } else if (filters.viable === "yes") {
+        query = query.eq("viable", true);
+      } else if (filters.viable === "no") {
+        query = query.eq("viable", false);
+      } else if (filters.viable === "na") {
+        query = query.is("viable", null);
+      }
+      // "all" – no filter
+    }
+
+    // Has website
+    if (filters.hasWebsite && filters.hasWebsite !== "all") {
+      query = query.eq("has_website", filters.hasWebsite === "yes");
+    }
+
+    // Order & paginate
+    query = query
       .order("has_website", { ascending: true })
       .order("website_score", { ascending: false, nullsFirst: false })
       .order("review_count", { ascending: false, nullsFirst: false })
       .range(from, to);
+
+    const { data, error, count } = await query;
 
     if (error) {
       toast({
@@ -79,6 +153,19 @@ export default function ClientsPage() {
       setTotalCount(count || 0);
     }
     setLoading(false);
+  }, [debouncedSearch, filters, toast]);
+
+  const fetchCategories = async () => {
+    const { data: catData } = await supabase
+      .from("businesses")
+      .select("category")
+      .not("category", "is", null)
+      .limit(1000);
+
+    if (catData) {
+      const unique = Array.from(new Set(catData.map((c: { category: string }) => c.category))).sort();
+      setAllCategories(unique);
+    }
   };
 
   const fetchDraftStatuses = useCallback(async (businessIds: string[]) => {
@@ -101,132 +188,26 @@ export default function ClientsPage() {
     }
   }, []);
 
+  // Reset page to 0 when any filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch, filters]);
+
+  // Fetch businesses whenever page, debounced search, or filters change
   useEffect(() => {
     fetchBusinesses(page);
-  }, [page]);
+  }, [page, fetchBusinesses]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     fetchDraftStatuses(businesses.map(b => b.id));
   }, [businesses, fetchDraftStatuses]);
 
-  // Get unique categories
-  const categories = useMemo(() => {
-    const cats = new Set(
-      businesses.map((b) => b.category).filter(Boolean) as string[]
-    );
-    return Array.from(cats).sort();
-  }, [businesses]);
-
-  // Filter and sort businesses
-  const filteredBusinesses = useMemo(() => {
-    // First filter
-    const filtered = businesses.filter((business) => {
-      // Hide businesses with good websites (score < 25)
-      if (business.has_website && business.website_score !== null && business.website_score < 25) {
-        return false;
-      }
-
-      // Investigated filter
-      if (filters.investigated && filters.investigated !== "all") {
-        const isInvestigated = filters.investigated === "yes";
-        if (business.investigated !== isInvestigated) {
-          return false;
-        }
-      }
-
-      // Viable filter
-      if (filters.viable) {
-        if (filters.viable === "not-red") {
-          // Hide non-viable (false), show viable (true) and not decided (null)
-          if (business.viable === false) {
-            return false;
-          }
-        } else if (filters.viable === "yes") {
-          if (business.viable !== true) {
-            return false;
-          }
-        } else if (filters.viable === "no") {
-          if (business.viable !== false) {
-            return false;
-          }
-        } else if (filters.viable === "na") {
-          if (business.viable !== null) {
-            return false;
-          }
-        }
-        // "all" shows everything
-      }
-
-      // Search
-      if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        if (
-          !business.name.toLowerCase().includes(search) &&
-          !business.address?.toLowerCase().includes(search) &&
-          !business.category?.toLowerCase().includes(search)
-        ) {
-          return false;
-        }
-      }
-
-      // Rating filter
-      if (filters.minRating && filters.minRating !== "all") {
-        const minRating = parseFloat(filters.minRating);
-        if (!business.rating || business.rating < minRating) {
-          return false;
-        }
-      }
-
-      // Category filter
-      if (filters.category && filters.category !== "all") {
-        if (business.category !== filters.category) {
-          return false;
-        }
-      }
-
-      // Website filter
-      if (filters.hasWebsite && filters.hasWebsite !== "all") {
-        const hasWebsite = filters.hasWebsite === "yes";
-        if (business.has_website !== hasWebsite) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    // Then sort: no website first, then by score (worst to best), then unknown at end
-    // Within each group, sort by review_count (most reviews first)
-    return filtered.sort((a, b) => {
-      // No website first (best prospects)
-      if (!a.has_website && b.has_website) return -1;
-      if (a.has_website && !b.has_website) return 1;
-
-      // Both no website: sort by review count (most first)
-      if (!a.has_website && !b.has_website) {
-        return (b.review_count || 0) - (a.review_count || 0);
-      }
-
-      // Both have website: sort by score (highest/worst first)
-      const aScore = a.website_score;
-      const bScore = b.website_score;
-
-      // Null scores (analysis failed) go to the end
-      if (aScore === null && bScore !== null) return 1;
-      if (aScore !== null && bScore === null) return -1;
-      if (aScore === null && bScore === null) {
-        return (b.review_count || 0) - (a.review_count || 0);
-      }
-
-      // Different score groups: higher score = worse site = better prospect = comes first
-      if (aScore! !== bScore!) {
-        return bScore! - aScore!;
-      }
-
-      // Same score group: sort by review count (most first)
-      return (b.review_count || 0) - (a.review_count || 0);
-    });
-  }, [businesses, searchTerm, filters]);
+  // Use allCategories from the dedicated query (full table, not just current page)
+  const categories = allCategories;
 
   const handleStartScrape = async (config: BusinessScrapeConfig) => {
     setIsScraping(true);
@@ -282,7 +263,8 @@ export default function ClientsPage() {
                   variant: "success",
                 });
                 setScrapeModalOpen(false);
-                fetchBusinesses();
+                fetchBusinesses(page);
+                fetchCategories();
                 break;
               case "error":
                 throw new Error(data.message);
@@ -473,8 +455,8 @@ export default function ClientsPage() {
 
   const handleExport = () => {
     const dataToExport = selectedIds.length > 0
-      ? filteredBusinesses.filter((b) => selectedIds.includes(b.id))
-      : filteredBusinesses;
+      ? businesses.filter((b) => selectedIds.includes(b.id))
+      : businesses;
 
     exportToCSV(
       dataToExport.map((b) => ({
@@ -508,11 +490,11 @@ export default function ClientsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Clients</h1>
           <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-            {filteredBusinesses.length} of {totalCount} potential clients
+            {totalCount} potential clients{debouncedSearch || Object.values(filters).some(v => v && v !== "not-red") ? " (filtered)" : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" onClick={() => fetchBusinesses()} disabled={loading} className="flex-1 sm:flex-none">
+          <Button variant="outline" size="sm" onClick={() => fetchBusinesses(page)} disabled={loading} className="flex-1 sm:flex-none">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="hidden xs:inline">Refresh</span>
           </Button>
@@ -553,7 +535,7 @@ export default function ClientsPage() {
         </div>
       ) : (
         <BusinessTable
-          businesses={filteredBusinesses}
+          businesses={businesses}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           onSendEmail={handleSendEmail}

@@ -98,16 +98,32 @@ export default function EmailsPage() {
     }
   };
 
+  const fetchTemplates = async () => {
+    const { data } = await supabase
+      .from("email_templates")
+      .select("id, name, subject, body, is_default, created_at, updated_at")
+      .order("is_default", { ascending: false });
+    setTemplates(data || []);
+  };
+
+  const fetchSentEmails = async () => {
+    const { data } = await supabase
+      .from("sent_emails")
+      .select("id, recipient_email, subject, body, status, sent_at, business_id, template_id, resend_id")
+      .order("sent_at", { ascending: false })
+      .limit(20);
+    setSentEmails(data || []);
+  };
+
   const fetchData = async () => {
     setLoading(true);
-    const [templatesRes, emailsRes] = await Promise.all([
-      supabase.from("email_templates").select("id, name, subject, body, is_default, created_at, updated_at").order("is_default", { ascending: false }),
-      supabase.from("sent_emails").select("id, recipient_email, subject, body, status, sent_at, business_id, template_id, resend_id").order("sent_at", { ascending: false }).limit(20),
+    await Promise.all([
+      fetchTemplates(),
+      fetchSentEmails(),
+      fetchDocuments(),
+      fetchDrafts(),
+      fetchBusinessDrafts(),
     ]);
-
-    setTemplates(templatesRes.data || []);
-    setSentEmails(emailsRes.data || []);
-    await Promise.all([fetchDocuments(), fetchDrafts(), fetchBusinessDrafts()]);
     setLoading(false);
   };
 
@@ -313,7 +329,7 @@ export default function EmailsPage() {
           variant: "success",
         });
         setEmailModalOpen(false);
-        fetchData();
+        fetchSentEmails();
       } else {
         throw new Error(result.error || "Failed to send email");
       }
@@ -356,7 +372,7 @@ export default function EmailsPage() {
       toast({ title: "Error", description: "Failed to delete template", variant: "destructive" });
     } else {
       toast({ title: "Deleted", description: "Template deleted successfully" });
-      fetchData();
+      fetchTemplates();
     }
   };
 
@@ -405,7 +421,7 @@ export default function EmailsPage() {
 
     toast({ title: "Saved", description: "Template saved successfully" });
     setEditModalOpen(false);
-    fetchData();
+    fetchTemplates();
   };
 
   const sampleData = {

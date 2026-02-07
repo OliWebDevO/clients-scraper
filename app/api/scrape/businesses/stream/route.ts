@@ -1,21 +1,38 @@
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
-import { isRateLimited } from "@/lib/rate-limit";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 
 export const maxDuration = 300; // 5 minutes max
 
 export async function POST(request: NextRequest) {
-  if (isRateLimited("scrape-businesses", 5, 60 * 1000)) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("scrape-businesses", 5, 60 * 1000, clientIp)) {
     return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
   }
 
   const body = await request.json();
-  const { location, radius, minRating, categories, maxResults = 10 } = body;
+  const { location, minRating, categories } = body;
+  const maxResults = Math.min(Math.max(1, Number(body.maxResults) || 10), 100);
+  const radius = Math.min(Math.max(1, Number(body.radius) || 10), 50000);
 
   if (!location) {
     return new Response(
       JSON.stringify({ error: "Location is required" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Input length validation
+  if (Array.isArray(categories) && categories.length > 20) {
+    return new Response(
+      JSON.stringify({ error: "Maximum 20 categories allowed" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (typeof location === "string" && location.length > 200) {
+    return new Response(
+      JSON.stringify({ error: "Location must be at most 200 characters" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -26,7 +43,8 @@ export async function POST(request: NextRequest) {
   const { data: existingBusinesses } = await supabase
     .from("businesses")
     .select("name, address")
-    .eq("location_query", location);
+    .eq("location_query", location)
+    .limit(5000);
 
   const excludeExisting = (existingBusinesses || []).map((b) => ({
     name: b.name,
@@ -149,7 +167,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error("Scrape stream error:", error);
         sendEvent("error", {
-          message: error instanceof Error ? error.message : "Erreur inconnue"
+          message: "An unexpected error occurred during scraping"
         });
       } finally {
         controller.close();

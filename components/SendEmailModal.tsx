@@ -57,7 +57,7 @@ export function SendEmailModal({
     async function fetchTemplates() {
       const { data } = await supabase
         .from("email_templates")
-        .select("*")
+        .select("id, name, subject, body, is_default, created_at, updated_at")
         .order("is_default", { ascending: false });
       if (data) {
         setTemplates(data);

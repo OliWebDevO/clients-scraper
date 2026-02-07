@@ -8,9 +8,10 @@ export async function GET() {
 
     const { data: draftsData, error } = await supabase
       .from("business_drafts")
-      .select("*")
+      .select("id, business_id, storage_path, filename, file_size, ai_model, status, error_message, final_storage_path, final_filename, final_file_size, created_at")
       .eq("status", "completed")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(50);
 
     if (error) throw error;
     if (!draftsData || draftsData.length === 0) {
@@ -83,8 +84,9 @@ export async function GET() {
 
     return NextResponse.json({ data: enrichedDrafts });
   } catch (error) {
+    console.error("Failed to fetch business drafts:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch business drafts" },
+      { error: "Failed to fetch business drafts" },
       { status: 500 }
     );
   }

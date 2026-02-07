@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { JobTable } from "@/components/JobTable";
 import { JobFilterPanel } from "@/components/JobFilterPanel";
@@ -11,6 +11,11 @@ import { supabase } from "@/lib/supabase";
 import type { Job, DraftProgressUpdate } from "@/lib/types";
 import { exportToCSV } from "@/lib/utils";
 import { Play, Download, RefreshCw, Briefcase } from "lucide-react";
+
+/** Escape special characters in a search string for use inside Supabase `.or()` / `.ilike()` */
+function sanitizeSearch(raw: string): string {
+  return raw.replace(/[%_\\]/g, (c) => `\\${c}`);
+}
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -46,15 +51,80 @@ export default function JobsPage() {
 
   const PAGE_SIZE = 50;
 
-  const fetchJobs = async (p = page) => {
+  // Debounced search term for the actual query
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 350);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchTerm]);
+
+  const fetchJobs = useCallback(async (p: number) => {
     setLoading(true);
     const from = p * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const { data, error, count } = await supabase
+
+    let query = supabase
       .from("jobs")
-      .select("id,title,company,location,salary,description,url,source,keywords_matched,posted_at,investigated,viable,created_at", { count: "exact" })
+      .select("id,title,company,location,salary,description,url,source,keywords_matched,posted_at,investigated,viable,created_at", { count: "exact" });
+
+    // --- Server-side filters ---
+
+    // Search
+    if (debouncedSearch) {
+      const s = sanitizeSearch(debouncedSearch);
+      query = query.or(`title.ilike.%${s}%,company.ilike.%${s}%,location.ilike.%${s}%`);
+    }
+
+    // Source
+    if (filters.source && filters.source !== "all") {
+      query = query.ilike("source", filters.source);
+    }
+
+    // Keyword (stored in keywords_matched array)
+    if (filters.keyword && filters.keyword !== "all") {
+      query = query.contains("keywords_matched", [filters.keyword]);
+    }
+
+    // Date range
+    if (filters.dateRange && filters.dateRange !== "all") {
+      const days = parseInt(filters.dateRange, 10);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutoffStr = cutoff.toISOString();
+      query = query.or(`posted_at.gte.${cutoffStr},and(posted_at.is.null,created_at.gte.${cutoffStr})`);
+    }
+
+    // Investigated
+    if (filters.investigated && filters.investigated !== "all") {
+      query = query.eq("investigated", filters.investigated === "yes");
+    }
+
+    // Viable
+    if (filters.viable) {
+      if (filters.viable === "not-red") {
+        query = query.or("viable.eq.true,viable.is.null");
+      } else if (filters.viable === "yes") {
+        query = query.eq("viable", true);
+      } else if (filters.viable === "no") {
+        query = query.eq("viable", false);
+      } else if (filters.viable === "na") {
+        query = query.is("viable", null);
+      }
+    }
+
+    // Order & paginate
+    query = query
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    const { data, error, count } = await query;
 
     if (error) {
       toast({
@@ -67,7 +137,7 @@ export default function JobsPage() {
       setTotalCount(count || 0);
     }
     setLoading(false);
-  };
+  }, [debouncedSearch, filters, toast]);
 
   const fetchDraftStatuses = useCallback(async (jobIds: string[]) => {
     if (jobIds.length === 0) return;
@@ -89,15 +159,21 @@ export default function JobsPage() {
     }
   }, []);
 
+  // Reset page to 0 when any filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch, filters]);
+
+  // Fetch jobs whenever page, debounced search, or filters change
   useEffect(() => {
     fetchJobs(page);
-  }, [page]);
+  }, [page, fetchJobs]);
 
   useEffect(() => {
     fetchDraftStatuses(jobs.map(j => j.id));
   }, [jobs, fetchDraftStatuses]);
 
-  // Get unique keywords
+  // Get unique keywords from current page (for the dropdown)
   const allKeywords = useMemo(() => {
     const kws = new Set<string>();
     jobs.forEach((job) => {
@@ -105,76 +181,6 @@ export default function JobsPage() {
     });
     return Array.from(kws).sort();
   }, [jobs]);
-
-  // Filter jobs
-  const filteredJobs = useMemo(() => {
-    return jobs.filter((job) => {
-      // Investigated filter
-      if (filters.investigated && filters.investigated !== "all") {
-        const isInvestigated = filters.investigated === "yes";
-        if (job.investigated !== isInvestigated) {
-          return false;
-        }
-      }
-
-      // Viable filter
-      if (filters.viable) {
-        if (filters.viable === "not-red") {
-          if (job.viable === false) return false;
-        } else if (filters.viable === "yes") {
-          if (job.viable !== true) return false;
-        } else if (filters.viable === "no") {
-          if (job.viable !== false) return false;
-        } else if (filters.viable === "na") {
-          if (job.viable !== null) return false;
-        }
-      }
-
-      // Search
-      if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        if (
-          !job.title.toLowerCase().includes(search) &&
-          !job.company?.toLowerCase().includes(search) &&
-          !job.location?.toLowerCase().includes(search)
-        ) {
-          return false;
-        }
-      }
-
-      // Source filter
-      if (filters.source && filters.source !== "all") {
-        if (job.source.toLowerCase() !== filters.source.toLowerCase()) {
-          return false;
-        }
-      }
-
-      // Keyword filter
-      if (filters.keyword && filters.keyword !== "all") {
-        if (!job.keywords_matched?.includes(filters.keyword)) {
-          return false;
-        }
-      }
-
-      // Date range filter
-      if (filters.dateRange && filters.dateRange !== "all") {
-        const days = parseInt(filters.dateRange, 10);
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - days);
-        const jobDate = job.posted_at ? new Date(job.posted_at) : new Date(job.created_at);
-        if (jobDate < cutoff) {
-          return false;
-        }
-      }
-
-      return true;
-    }).sort((a, b) => {
-      // Sort by posted date (most recent first), fallback to created_at
-      const dateA = new Date(a.posted_at || a.created_at).getTime();
-      const dateB = new Date(b.posted_at || b.created_at).getTime();
-      return dateB - dateA;
-    });
-  }, [jobs, searchTerm, filters]);
 
   const handleStartScrape = async (config: JobScrapeConfig) => {
     setIsScraping(true);
@@ -229,7 +235,7 @@ export default function JobsPage() {
                   variant: "success",
                 });
                 setScrapeModalOpen(false);
-                fetchJobs();
+                fetchJobs(page);
                 break;
               case "error":
                 throw new Error(data.message);
@@ -354,8 +360,8 @@ export default function JobsPage() {
   const handleExport = () => {
     const dataToExport =
       selectedIds.length > 0
-        ? filteredJobs.filter((j) => selectedIds.includes(j.id))
-        : filteredJobs;
+        ? jobs.filter((j) => selectedIds.includes(j.id))
+        : jobs;
 
     exportToCSV(
       dataToExport.map((j) => ({
@@ -389,11 +395,11 @@ export default function JobsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Jobs</h1>
           <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-            {filteredJobs.length} of {totalCount} job opportunities
+            {totalCount} job opportunities{debouncedSearch || Object.values(filters).some(v => v && v !== "not-red") ? " (filtered)" : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" onClick={() => fetchJobs()} disabled={loading} className="flex-1 sm:flex-none">
+          <Button variant="outline" size="sm" onClick={() => fetchJobs(page)} disabled={loading} className="flex-1 sm:flex-none">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="hidden xs:inline">Refresh</span>
           </Button>
@@ -428,7 +434,7 @@ export default function JobsPage() {
         </div>
       ) : (
         <JobTable
-          jobs={filteredJobs}
+          jobs={jobs}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           onToggleInvestigated={handleToggleInvestigated}

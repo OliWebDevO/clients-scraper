@@ -53,7 +53,7 @@ export default function SettingsPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("scrape_schedules")
-      .select("*")
+      .select("id, name, type, enabled, frequency, time_of_day, day_of_week, config, last_run_at, next_run_at, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {

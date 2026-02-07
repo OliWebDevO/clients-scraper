@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   ExternalLink,
   Calendar,
@@ -46,8 +46,6 @@ export const JobTable = React.memo(function JobTable({
   onDraft,
   draftStatuses = {},
 }: JobTableProps) {
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-
   const toggleSelection = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter((i) => i !== id));
@@ -269,11 +267,7 @@ export const JobTable = React.memo(function JobTable({
               {jobs.map((job) => (
                 <tr
                   key={job.id}
-                  className={`border-b border-border transition-colors duration-150 ${
-                    hoveredRow === job.id ? "bg-muted/30" : ""
-                  } ${selectedIds.includes(job.id) ? "bg-primary/5" : ""} ${job.investigated ? "opacity-50" : ""}`}
-                  onMouseEnter={() => setHoveredRow(job.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
+                  className={`border-b border-border transition-colors duration-150 hover:bg-muted/30 ${selectedIds.includes(job.id) ? "bg-primary/5" : ""} ${job.investigated ? "opacity-50" : ""}`}
                 >
                   <td className="px-4 py-3">
                     <Checkbox

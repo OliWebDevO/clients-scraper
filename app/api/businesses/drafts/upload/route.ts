@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 
 const ALLOWED_MIME_TYPES = [
   "application/pdf",
@@ -18,6 +19,11 @@ function sanitizeFilename(name: string): string {
 
 // POST: Upload final version of a business draft
 export async function POST(request: NextRequest) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("business-drafts-upload", 10, 60 * 1000, clientIp)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -92,8 +98,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: updated });
   } catch (error) {
+    console.error("Upload business draft error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to upload final version" },
+      { error: "An internal error occurred" },
       { status: 500 }
     );
   }
@@ -137,8 +144,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("Delete business draft error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete final version" },
+      { error: "An internal error occurred" },
       { status: 500 }
     );
   }

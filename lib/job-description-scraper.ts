@@ -19,24 +19,35 @@ const GENERIC_SELECTORS = [
   '[role="main"]',
 ];
 
-function isAllowedUrl(url: string): boolean {
+export function isAllowedUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     // Only allow http/https
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
-    // Block private/internal IPs
+    // Block private/internal IPs and hostnames
     const hostname = parsed.hostname;
+
+    // Block IPv6 loopback and any hostname containing colons (IPv6 literals)
+    if (hostname === "::1" || hostname === "[::1]" || hostname.includes(":")) return false;
+
     if (
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
       hostname === "0.0.0.0" ||
       hostname.startsWith("192.168.") ||
       hostname.startsWith("10.") ||
-      hostname.startsWith("172.") ||
       hostname === "169.254.169.254" ||
       hostname.endsWith(".internal") ||
       hostname.endsWith(".local")
     ) return false;
+
+    // Block 172.16.0.0 - 172.31.255.255 (private range only)
+    if (hostname.startsWith("172.")) {
+      const parts = hostname.split(".");
+      const secondOctet = parseInt(parts[1], 10);
+      if (secondOctet >= 16 && secondOctet <= 31) return false;
+    }
+
     return true;
   } catch {
     return false;
@@ -77,18 +88,42 @@ async function scrapeWithPuppeteer(url: string): Promise<string> {
 
 async function scrapeWithFetch(url: string): Promise<string> {
   await randomDelay(1000, 3000);
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.5,fr;q=0.3",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} fetching ${url}`);
+
+  const MAX_REDIRECTS = 3;
+  let currentUrl = url;
+
+  for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    const response = await fetch(currentUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5,fr;q=0.3",
+      },
+      redirect: "manual",
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        throw new Error(`Redirect with no Location header from ${currentUrl}`);
+      }
+      // Resolve relative redirects
+      const redirectUrl = new URL(location, currentUrl).toString();
+      if (!isAllowedUrl(redirectUrl)) {
+        throw new Error("Redirect URL not allowed: only public http/https URLs are permitted");
+      }
+      currentUrl = redirectUrl;
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} fetching ${currentUrl}`);
+    }
+    return response.text();
   }
-  return response.text();
+
+  throw new Error(`Too many redirects (max ${MAX_REDIRECTS}) fetching ${url}`);
 }
 
 async function scrapeActirisApi(url: string): Promise<string> {

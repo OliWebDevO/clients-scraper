@@ -3,31 +3,18 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { downloadAndParseDocument } from "@/lib/document-parser";
 import { customizeProposal } from "@/lib/ai-customize";
 import { generateDocx } from "@/lib/docx-generator";
-import { isRateLimited } from "@/lib/rate-limit";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
+import { reapplySpacing } from "@/lib/utils";
 
 export const maxDuration = 120; // 2 minutes max
-
-/**
- * Re-apply the blank line spacing pattern from the original text onto the AI-generated text.
- */
-function reapplySpacing(original: string, generated: string): string {
-  const originalGaps = original.match(/\n{2,}/g) || [];
-
-  let gapIndex = 0;
-  return generated.replace(/\n{2,}/g, () => {
-    if (gapIndex < originalGaps.length) {
-      return originalGaps[gapIndex++];
-    }
-    return "\n\n";
-  });
-}
 
 interface DraftRequest {
   businessId: string;
 }
 
 export async function POST(request: NextRequest) {
-  if (isRateLimited("draft-business", 10, 60 * 1000)) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("draft-business", 10, 60 * 1000, clientIp)) {
     return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
   }
 
@@ -37,6 +24,14 @@ export async function POST(request: NextRequest) {
   if (!businessId) {
     return new Response(
       JSON.stringify({ error: "No businessId specified" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(businessId)) {
+    return new Response(
+      JSON.stringify({ error: "Invalid ID format" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -60,7 +55,7 @@ export async function POST(request: NextRequest) {
 
         const { data: business, error: bizError } = await supabase
           .from("businesses")
-          .select("*")
+          .select("id, name, category, address, website_url, website_score, website_issues")
           .eq("id", businessId)
           .single();
 
@@ -81,17 +76,13 @@ export async function POST(request: NextRequest) {
           phase: "reading_documents",
         });
 
-        const { data: documents, error: docsError } = await supabase
+        const { data: proposalDoc, error: docsError } = await supabase
           .from("user_documents")
-          .select("*");
+          .select("id, type, filename, storage_path, mime_type, file_size, created_at, updated_at")
+          .eq("type", "proposal_template")
+          .single();
 
-        if (docsError) {
-          throw new Error("Impossible de charger les documents");
-        }
-
-        const proposalDoc = documents?.find((d: { type: string }) => d.type === "proposal_template");
-
-        if (!proposalDoc) {
+        if (docsError || !proposalDoc) {
           throw new Error("Aucun template de proposition uploade. Uploadez-le dans l'onglet Email.");
         }
 

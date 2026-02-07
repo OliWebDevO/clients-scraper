@@ -5,6 +5,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { isAllowedUrl } from "@/lib/job-description-scraper";
 
 export interface WebsiteAnalysis {
   url: string;
@@ -63,38 +64,70 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
       normalizedUrl = "https://" + normalizedUrl;
     }
 
+    // SSRF protection: block private/internal URLs
+    if (!isAllowedUrl(normalizedUrl)) {
+      console.warn(`Blocked SSRF attempt for URL: ${normalizedUrl}`);
+      return null;
+    }
+
     // Check HTTPS
     checks.hasHttps = normalizedUrl.startsWith("https://");
     if (!checks.hasHttps) {
       issues.push("Pas de HTTPS - site non sécurisé");
     }
 
-    // Fetch the page with timeout
+    // Fetch the page with timeout and manual redirect handling
     const startTime = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
+    const MAX_REDIRECTS = 3;
 
     let response: Response;
+    let fetchUrl = normalizedUrl;
+
+    async function fetchWithSafeRedirects(
+      url: string,
+      options: RequestInit
+    ): Promise<Response> {
+      let currentUrl = url;
+      for (let i = 0; i <= MAX_REDIRECTS; i++) {
+        const res = await fetch(currentUrl, { ...options, redirect: "manual" });
+        if (res.status >= 300 && res.status < 400) {
+          const location = res.headers.get("location");
+          if (!location) {
+            throw new Error(`Redirect with no Location header from ${currentUrl}`);
+          }
+          const redirectUrl = new URL(location, currentUrl).toString();
+          if (!isAllowedUrl(redirectUrl)) {
+            throw new Error("Redirect to disallowed URL blocked");
+          }
+          currentUrl = redirectUrl;
+          continue;
+        }
+        return res;
+      }
+      throw new Error(`Too many redirects (max ${MAX_REDIRECTS})`);
+    }
+
     try {
-      response = await fetch(normalizedUrl, {
+      response = await fetchWithSafeRedirects(fetchUrl, {
         headers: {
           "User-Agent": USER_AGENT,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "fr-BE,fr;q=0.9,en;q=0.8",
         },
         signal: controller.signal,
-        redirect: "follow",
       });
       clearTimeout(timeout);
     } catch {
+      clearTimeout(timeout);
       // Try HTTP if HTTPS fails
       if (normalizedUrl.startsWith("https://")) {
         const httpUrl = normalizedUrl.replace("https://", "http://");
         try {
-          response = await fetch(httpUrl, {
+          response = await fetchWithSafeRedirects(httpUrl, {
             headers: { "User-Agent": USER_AGENT },
             signal: AbortSignal.timeout(8000),
-            redirect: "follow",
           });
           checks.hasHttps = false;
           issues.push("HTTPS ne fonctionne pas - repli sur HTTP");

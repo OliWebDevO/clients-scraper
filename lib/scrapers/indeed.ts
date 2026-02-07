@@ -5,13 +5,29 @@ import puppeteer from "puppeteer";
 export class IndeedScraper {
   private source = "Indeed";
   private baseUrl = "https://be.indeed.com";
+  private browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  private keepAlive = false;
 
-  async scrape(keywords: string[], location?: string, pageNum?: number): Promise<ScraperResult> {
-    const jobs: Partial<Job>[] = [];
-    let browser;
+  /**
+   * Keep the browser alive between scrape() calls.
+   * Call close() when done to release resources.
+   */
+  setKeepAlive(value: boolean): this {
+    this.keepAlive = value;
+    return this;
+  }
 
-    try {
-      browser = await puppeteer.launch({
+  /** Close the cached browser instance. Call this when done with pagination. */
+  async close(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+    }
+  }
+
+  private async getBrowser() {
+    if (!this.browser) {
+      this.browser = await puppeteer.launch({
         headless: true,
         args: [
           "--no-sandbox",
@@ -19,6 +35,15 @@ export class IndeedScraper {
           "--disable-blink-features=AutomationControlled",
         ],
       });
+    }
+    return this.browser;
+  }
+
+  async scrape(keywords: string[], location?: string, pageNum?: number): Promise<ScraperResult> {
+    const jobs: Partial<Job>[] = [];
+
+    try {
+      const browser = await this.getBrowser();
 
       const page = await browser.newPage();
 
@@ -153,8 +178,9 @@ export class IndeedScraper {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     } finally {
-      if (browser) {
-        await browser.close();
+      // Close the browser unless keepAlive is set (caller will call close() later)
+      if (!this.keepAlive) {
+        await this.close();
       }
     }
   }

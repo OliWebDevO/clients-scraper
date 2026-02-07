@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   ExternalLink,
   Star,
@@ -42,8 +42,6 @@ export const BusinessTable = React.memo(function BusinessTable({
   onDraft,
   draftStatuses = {},
 }: BusinessTableProps) {
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-
   const toggleSelection = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter((i) => i !== id));
@@ -267,11 +265,7 @@ export const BusinessTable = React.memo(function BusinessTable({
               {businesses.map((business) => (
                 <tr
                   key={business.id}
-                  className={`border-b border-border transition-colors duration-150 ${
-                    hoveredRow === business.id ? "bg-muted/30" : ""
-                  } ${selectedIds.includes(business.id) ? "bg-primary/5" : ""} ${business.investigated ? "opacity-50" : ""}`}
-                  onMouseEnter={() => setHoveredRow(business.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
+                  className={`border-b border-border transition-colors duration-150 hover:bg-muted/30 ${selectedIds.includes(business.id) ? "bg-primary/5" : ""} ${business.investigated ? "opacity-50" : ""}`}
                 >
                   <td className="px-4 py-3">
                     <Checkbox

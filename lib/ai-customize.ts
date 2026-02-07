@@ -3,6 +3,19 @@ import OpenAI from "openai";
 // --- OpenAI (actif) ---
 const AI_MODEL = "gpt-4o-mini";
 
+// Singleton OpenAI client
+let _openaiClient: OpenAI | null = null;
+function getOpenAIClient(): OpenAI {
+  if (!_openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is not configured. Add it to your .env.local file.");
+    }
+    _openaiClient = new OpenAI({ apiKey });
+  }
+  return _openaiClient;
+}
+
 // --- Anthropic (alternatif, pour plus tard) ---
 // import Anthropic from "@anthropic-ai/sdk";
 // const AI_MODEL = "claude-haiku-4-5-20251001";
@@ -55,12 +68,7 @@ Customize this cover letter for the job above. Output only the customized letter
 
 // --- OpenAI implementation (actif) ---
 export async function customizeCoverLetter(input: CustomizeInput): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured. Add it to your .env.local file.");
-  }
-
-  const client = new OpenAI({ apiKey });
+  const client = getOpenAIClient();
 
   const response = await client.chat.completions.create({
     model: AI_MODEL,
@@ -130,12 +138,7 @@ Customize this business proposal for the client above. Reference their specific 
 }
 
 export async function customizeProposal(input: CustomizeProposalInput): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured. Add it to your .env.local file.");
-  }
-
-  const client = new OpenAI({ apiKey });
+  const client = getOpenAIClient();
 
   const response = await client.chat.completions.create({
     model: AI_MODEL,

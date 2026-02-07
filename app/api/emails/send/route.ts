@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { sendEmail } from "@/lib/resend";
-import { isRateLimited } from "@/lib/rate-limit";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 
 interface SendEmailRequest {
   recipientEmail: string;
@@ -12,7 +12,8 @@ interface SendEmailRequest {
 }
 
 export async function POST(request: NextRequest) {
-  if (isRateLimited("email-send", 20, 60 * 1000)) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("email-send", 20, 60 * 1000, clientIp)) {
     return NextResponse.json({ success: false, error: "Too many requests" }, { status: 429 });
   }
 
@@ -27,9 +28,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate email format
+    // Input length validation
+    if (subject.length > 500) {
+      return NextResponse.json(
+        { success: false, error: "Subject must be at most 500 characters" },
+        { status: 400 }
+      );
+    }
+    if (emailBody.length > 50000) {
+      return NextResponse.json(
+        { success: false, error: "Email body must be at most 50000 characters" },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format, max length, and minimum TLD length
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(recipientEmail)) {
+    if (
+      recipientEmail.length > 254 ||
+      !emailRegex.test(recipientEmail) ||
+      !/\.[a-zA-Z]{2,}$/.test(recipientEmail)
+    ) {
       return NextResponse.json(
         { success: false, error: "Invalid email address" },
         { status: 400 }
@@ -71,7 +90,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to send email",
+        error: "An internal error occurred",
       },
       { status: 500 }
     );

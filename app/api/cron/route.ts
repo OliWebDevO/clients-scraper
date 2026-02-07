@@ -12,8 +12,8 @@ function verifyCronSecret(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.warn("CRON_SECRET not configured");
-    return true; // Allow in development
+    console.error("CRON_SECRET is not configured - rejecting request");
+    return false;
   }
 
   return authHeader === `Bearer ${cronSecret}`;
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     // Find schedules that are due
     const { data: dueSchedules, error } = await supabase
       .from("scrape_schedules")
-      .select("*")
+      .select("id, name, type, enabled, frequency, time_of_day, day_of_week, config, last_run_at, next_run_at, created_at")
       .eq("enabled", true)
       .lte("next_run_at", now);
 
@@ -50,6 +50,11 @@ export async function GET(request: NextRequest) {
 
     const results: Array<{ schedule: string; status: string; items: number }> = [];
 
+    // NOTE: Schedules are processed sequentially. Running them in parallel
+    // (e.g. via Promise.allSettled) could improve throughput when multiple
+    // schedules are due, but Puppeteer-based scrapers are memory-intensive,
+    // so parallel execution risks OOM. With maxDuration=300s, sequential
+    // processing is acceptable for the expected workload.
     for (const schedule of dueSchedules as ScrapeSchedule[]) {
       try {
         console.log(`Running schedule: ${schedule.name}`);
@@ -79,24 +84,31 @@ export async function GET(request: NextRequest) {
               const scraper = getScraperForPlatform(platform);
               const result = await scraper.scrape(keywords, schedule.config.job_location);
 
+              const buffer: Record<string, unknown>[] = [];
               for (const job of result.jobs) {
                 if (!job.url || !job.title) continue;
 
-                const { error: insertError } = await supabase.from("jobs").upsert(
-                  {
-                    title: job.title,
-                    company: job.company || null,
-                    location: job.location || null,
-                    salary: job.salary || null,
-                    url: job.url,
-                    source: job.source || platform,
-                    keywords_matched: job.keywords_matched || [],
-                    posted_at: job.posted_at || null,
-                  },
-                  { onConflict: "url" }
-                );
+                buffer.push({
+                  title: job.title,
+                  company: job.company || null,
+                  location: job.location || null,
+                  salary: job.salary || null,
+                  url: job.url,
+                  source: job.source || platform,
+                  keywords_matched: job.keywords_matched || [],
+                  posted_at: job.posted_at || null,
+                });
 
-                if (!insertError) itemsFound++;
+                if (buffer.length >= 25) {
+                  const { error: insertError } = await supabase.from("jobs").upsert(buffer, { onConflict: "url" });
+                  if (!insertError) itemsFound += buffer.length;
+                  buffer.length = 0;
+                }
+              }
+
+              if (buffer.length > 0) {
+                const { error: insertError } = await supabase.from("jobs").upsert(buffer, { onConflict: "url" });
+                if (!insertError) itemsFound += buffer.length;
               }
             } catch (err) {
               console.error(`Error scraping ${platform}:`, err);
@@ -111,28 +123,35 @@ export async function GET(request: NextRequest) {
             categories: schedule.config.categories,
           }, () => {});
 
+          const bizBuffer: Record<string, unknown>[] = [];
           for (const business of result.businesses) {
             if (!business.name) continue;
 
-            const { error: insertError } = await supabase.from("businesses").upsert(
-              {
-                name: business.name,
-                address: business.address || null,
-                phone: business.phone || null,
-                rating: business.rating || null,
-                review_count: business.review_count || null,
-                category: business.category || null,
-                google_maps_url: business.google_maps_url || null,
-                has_website: business.has_website || false,
-                website_url: business.website_url || null,
-                website_score: business.website_score || null,
-                website_issues: business.website_issues || null,
-                location_query: business.location_query,
-              },
-              { onConflict: "name,address" }
-            );
+            bizBuffer.push({
+              name: business.name,
+              address: business.address || null,
+              phone: business.phone || null,
+              rating: business.rating || null,
+              review_count: business.review_count || null,
+              category: business.category || null,
+              google_maps_url: business.google_maps_url || null,
+              has_website: business.has_website || false,
+              website_url: business.website_url || null,
+              website_score: business.website_score || null,
+              website_issues: business.website_issues || null,
+              location_query: business.location_query,
+            });
 
-            if (!insertError) itemsFound++;
+            if (bizBuffer.length >= 25) {
+              const { error: insertError } = await supabase.from("businesses").upsert(bizBuffer, { onConflict: "name,address" });
+              if (!insertError) itemsFound += bizBuffer.length;
+              bizBuffer.length = 0;
+            }
+          }
+
+          if (bizBuffer.length > 0) {
+            const { error: insertError } = await supabase.from("businesses").upsert(bizBuffer, { onConflict: "name,address" });
+            if (!insertError) itemsFound += bizBuffer.length;
           }
         }
 
@@ -186,7 +205,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "An internal error occurred",
       },
       { status: 500 }
     );

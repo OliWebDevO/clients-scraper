@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 
 const ALLOWED_MIME_TYPES: Record<string, string[]> = {
   cv: ["application/pdf"],
@@ -31,33 +32,32 @@ export async function GET() {
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
       .from("user_documents")
-      .select("*")
+      .select("id, type, filename, storage_path, mime_type, file_size, created_at, updated_at")
       .order("type", { ascending: true });
 
     if (error) throw error;
 
-    // Generate signed URLs for each document (view + download)
+    // Generate signed URLs for each document (view + download) in parallel
     const docsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
-        const { data: urlData } = await supabase.storage
-          .from("documents")
-          .createSignedUrl(doc.storage_path, 3600);
-        const { data: dlData } = await supabase.storage
-          .from("documents")
-          .createSignedUrl(doc.storage_path, 3600, { download: doc.filename });
+        const [urlData, dlData] = await Promise.all([
+          supabase.storage.from("documents").createSignedUrl(doc.storage_path, 3600),
+          supabase.storage.from("documents").createSignedUrl(doc.storage_path, 3600, { download: doc.filename }),
+        ]);
 
         return {
           ...doc,
-          url: urlData?.signedUrl || null,
-          download_url: dlData?.signedUrl || null,
+          url: urlData.data?.signedUrl || null,
+          download_url: dlData.data?.signedUrl || null,
         };
       })
     );
 
     return NextResponse.json({ data: docsWithUrls });
   } catch (error) {
+    console.error("Fetch documents error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch documents" },
+      { error: "An internal error occurred" },
       { status: 500 }
     );
   }
@@ -65,6 +65,11 @@ export async function GET() {
 
 // POST: Upload a document
 export async function POST(request: NextRequest) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("documents-write", 10, 60 * 1000, clientIp)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -147,8 +152,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: doc });
   } catch (error) {
+    console.error("Upload document error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to upload document" },
+      { error: "An internal error occurred" },
       { status: 500 }
     );
   }
@@ -156,6 +162,11 @@ export async function POST(request: NextRequest) {
 
 // DELETE: Remove a document
 export async function DELETE(request: NextRequest) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("documents-write", 10, 60 * 1000, clientIp)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const { id } = await request.json();
 
@@ -189,8 +200,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("Delete document error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete document" },
+      { error: "An internal error occurred" },
       { status: 500 }
     );
   }

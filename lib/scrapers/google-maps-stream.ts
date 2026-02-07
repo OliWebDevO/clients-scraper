@@ -1,7 +1,7 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 import type { Business } from "@/lib/types";
 import { delay, randomDelay, parseRating, parseReviewCount } from "@/lib/utils";
-import { analyzeWebsite } from "@/lib/website-analyzer";
+import { analyzeWebsites } from "@/lib/website-analyzer";
 
 export interface GoogleMapsScraperConfig {
   location: string;
@@ -221,34 +221,6 @@ export async function scrapeGoogleMapsWithProgress(
               location_query: config.location,
             };
 
-            // Analyze website if present
-            if (business.website_url) {
-              onProgress({
-                current: allBusinesses.length,
-                total: maxResults,
-                progress: Math.min(25 + ((allBusinesses.length / maxResults) * 65), 90),
-                message: `Analyse: ${businessData.name}...`,
-                businessName: businessData.name,
-                phase: "analyzing",
-              });
-
-              try {
-                const analysis = await analyzeWebsite(business.website_url);
-                if (analysis) {
-                  business.website_score = analysis.score;
-                  business.website_issues = analysis.issues;
-
-                  // Skip businesses with GOOD websites (score < 25)
-                  if (analysis.score < 25) {
-                    console.log(`Skipping ${businessData.name} - good website (score: ${analysis.score})`);
-                    continue;
-                  }
-                }
-              } catch (err) {
-                console.error(`Error analyzing ${business.website_url}:`, err);
-              }
-            }
-
             allBusinesses.push(business);
 
             onProgress({
@@ -286,6 +258,46 @@ export async function scrapeGoogleMapsWithProgress(
       }
 
       await randomDelay(2000, 4000);
+    }
+
+    // Phase: Batch analyze all websites in parallel
+    const businessesWithWebsites = allBusinesses.filter((b) => b.website_url);
+    if (businessesWithWebsites.length > 0) {
+      onProgress({
+        current: allBusinesses.length,
+        total: maxResults,
+        progress: 85,
+        message: `Analyse de ${businessesWithWebsites.length} sites web en parallèle...`,
+        phase: "analyzing",
+      });
+
+      const websiteUrls = businessesWithWebsites.map((b) => b.website_url!);
+      const analysisResults = await analyzeWebsites(websiteUrls, 5);
+
+      // Apply analysis results back to businesses
+      for (const business of businessesWithWebsites) {
+        const analysis = analysisResults.get(business.website_url!);
+        if (analysis) {
+          business.website_score = analysis.score;
+          business.website_issues = analysis.issues;
+        }
+      }
+
+      // Remove businesses with GOOD websites (score < 25)
+      const beforeCount = allBusinesses.length;
+      const filtered = allBusinesses.filter((b) => {
+        if (b.has_website && b.website_score !== null && b.website_score !== undefined && b.website_score < 25) {
+          console.log(`Skipping ${b.name} - good website (score: ${b.website_score})`);
+          return false;
+        }
+        return true;
+      });
+      allBusinesses.length = 0;
+      allBusinesses.push(...filtered);
+
+      if (beforeCount !== allBusinesses.length) {
+        console.log(`Filtered out ${beforeCount - allBusinesses.length} businesses with good websites`);
+      }
     }
 
     // Sort: no website first, then by score (highest = worst site = best prospect)

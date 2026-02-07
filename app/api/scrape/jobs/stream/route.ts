@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
 import { expandKeywords } from "@/lib/scrapers/base";
-import { isRateLimited } from "@/lib/rate-limit";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 import type { JobPlatform, Job } from "@/lib/types";
 
 export const maxDuration = 300; // 5 minutes max
@@ -15,13 +15,14 @@ interface ScrapeJobsRequest {
 }
 
 export async function POST(request: NextRequest) {
-  if (isRateLimited("scrape-jobs", 5, 60 * 1000)) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("scrape-jobs", 5, 60 * 1000, clientIp)) {
     return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
   }
 
   const body: ScrapeJobsRequest = await request.json();
   const { platforms, location } = body;
-  const MAX_JOBS = body.maxResults || 20;
+  const MAX_JOBS = Math.min(Math.max(1, Number(body.maxResults) || 20), 100);
   // Expand keywords with French/English counterparts and contractions
   const keywords = expandKeywords(body.keywords);
   console.log(`Keywords expanded: ${body.keywords.length} -> ${keywords.length}`, keywords);
@@ -36,6 +37,20 @@ export async function POST(request: NextRequest) {
   if (!keywords || keywords.length === 0) {
     return new Response(
       JSON.stringify({ error: "No keywords specified" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Input length validation
+  if (body.keywords.length > 20) {
+    return new Response(
+      JSON.stringify({ error: "Maximum 20 keywords allowed" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  if (body.keywords.some((k) => k.length > 100)) {
+    return new Response(
+      JSON.stringify({ error: "Each keyword must be at most 100 characters" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -55,7 +70,8 @@ export async function POST(request: NextRequest) {
         const { data: existingJobs } = await supabase
           .from("jobs")
           .select("url")
-          .gte("created_at", thirtyDaysAgo);
+          .gte("created_at", thirtyDaysAgo)
+          .limit(10000);
 
         const existingUrls = new Set((existingJobs || []).map(j => j.url));
         console.log(`Found ${existingUrls.size} existing jobs to exclude`);
@@ -84,6 +100,20 @@ export async function POST(request: NextRequest) {
         const allJobs: Partial<Job>[] = [];
         const errors: string[] = [];
 
+        // Create scrapers once and reuse across pages (avoids launching
+        // a new Puppeteer browser for every pagination call)
+        const scraperMap = new Map<string, ReturnType<typeof getScraperForPlatform>>();
+        const getOrCreateScraper = (platform: JobPlatform) => {
+          if (!scraperMap.has(platform)) {
+            const scraper = getScraperForPlatform(platform);
+            // Tell the scraper to keep its browser alive between scrape() calls
+            scraper.setKeepAlive?.(true);
+            scraperMap.set(platform, scraper);
+          }
+          return scraperMap.get(platform)!;
+        };
+
+        try {
         // Scrape each platform
         for (let i = 0; i < platforms.length; i++) {
           const platform = platforms[i];
@@ -100,7 +130,7 @@ export async function POST(request: NextRequest) {
 
           try {
             console.log(`Scraping ${platform}...`);
-            const scraper = getScraperForPlatform(platform);
+            const scraper = getOrCreateScraper(platform);
             const result = await scraper.scrape(keywords, location);
 
             if (result.error) {
@@ -191,7 +221,7 @@ export async function POST(request: NextRequest) {
             });
 
             try {
-              const scraper = getScraperForPlatform(platform);
+              const scraper = getOrCreateScraper(platform);
               const result = await scraper.scrape(keywords, location, currentPage);
 
               if (result.error || result.jobs.length === 0) continue;
@@ -215,6 +245,16 @@ export async function POST(request: NextRequest) {
           }
 
           if (!foundNewInThisPass) break;
+        }
+        } finally {
+          // Close all cached browser instances (e.g. IndeedScraper)
+          for (const scraper of scraperMap.values()) {
+            try {
+              await scraper.close?.();
+            } catch {
+              // ignore close errors
+            }
+          }
         }
 
         // Insert jobs into database
@@ -279,7 +319,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error("Scrape jobs stream error:", error);
         sendEvent("error", {
-          message: error instanceof Error ? error.message : "Erreur inconnue"
+          message: "An unexpected error occurred during scraping"
         });
       } finally {
         controller.close();

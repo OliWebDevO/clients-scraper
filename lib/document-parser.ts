@@ -59,9 +59,27 @@ export async function downloadAndParseDocument(storagePath: string, mimeType: st
 }
 
 async function parsePdf(buffer: Buffer): Promise<string> {
-  const pdfParse = (await import("pdf-parse")).default;
-  const result = await pdfParse(buffer);
-  return result.text.trim();
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    isEvalSupported: false,
+  });
+
+  const pdf = await loadingTask.promise;
+  const textParts: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .filter((item) => "str" in item && typeof (item as { str: string }).str === "string")
+      .map((item) => (item as { str: string }).str)
+      .join(" ");
+    textParts.push(pageText);
+  }
+
+  return textParts.join("\n").trim();
 }
 
 async function parseDocx(buffer: Buffer): Promise<ParsedDocument> {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
+import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 
 export const maxDuration = 300; // 5 minutes max
 
@@ -13,9 +14,15 @@ interface ScrapeBusinessesRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const clientIp = getClientIdentifier(request);
+  if (isRateLimited("scrape-businesses", 5, 60 * 1000, clientIp)) {
+    return NextResponse.json({ success: false, error: "Too many requests" }, { status: 429 });
+  }
+
   try {
     const body: ScrapeBusinessesRequest = await request.json();
-    const { location, radius, minRating, categories, maxResults = 10 } = body;
+    const { location, radius, minRating, categories } = body;
+    const maxResults = Math.min(Math.max(1, Number(body.maxResults) || 10), 100);
 
     if (!location) {
       return NextResponse.json(
@@ -30,7 +37,8 @@ export async function POST(request: NextRequest) {
     const { data: existingBusinesses } = await supabase
       .from("businesses")
       .select("name, address")
-      .eq("location_query", location);
+      .eq("location_query", location)
+      .limit(5000);
 
     const excludeExisting = (existingBusinesses || []).map((b) => ({
       name: b.name,
@@ -85,34 +93,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert businesses into database
+    // Insert businesses into database in batches
     let insertedCount = 0;
+    const buffer: Record<string, unknown>[] = [];
+
     for (const business of result.businesses) {
       if (!business.name) continue;
 
-      const { error } = await supabase.from("businesses").upsert(
-        {
-          name: business.name,
-          address: business.address || null,
-          phone: business.phone || null,
-          rating: business.rating || null,
-          review_count: business.review_count || null,
-          category: business.category || null,
-          google_maps_url: business.google_maps_url || null,
-          has_website: business.has_website || false,
-          website_url: business.website_url || null,
-          website_score: business.website_score || null,
-          website_issues: business.website_issues || null,
-          location_query: business.location_query || location,
-        },
-        { onConflict: "name,address" }
-      );
+      buffer.push({
+        name: business.name,
+        address: business.address || null,
+        phone: business.phone || null,
+        rating: business.rating || null,
+        review_count: business.review_count || null,
+        category: business.category || null,
+        google_maps_url: business.google_maps_url || null,
+        has_website: business.has_website || false,
+        website_url: business.website_url || null,
+        website_score: business.website_score || null,
+        website_issues: business.website_issues || null,
+        location_query: business.location_query || location,
+      });
 
-      if (!error) {
-        insertedCount++;
-      } else {
-        console.error("Insert error:", error);
+      if (buffer.length >= 25) {
+        const { error } = await supabase.from("businesses").upsert(buffer, { onConflict: "name,address" });
+        if (!error) insertedCount += buffer.length;
+        else console.error("Insert error:", error);
+        buffer.length = 0;
       }
+    }
+
+    if (buffer.length > 0) {
+      const { error } = await supabase.from("businesses").upsert(buffer, { onConflict: "name,address" });
+      if (!error) insertedCount += buffer.length;
+      else console.error("Insert error:", error);
     }
 
     // Update scrape log
@@ -140,7 +154,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "An internal error occurred",
       },
       { status: 500 }
     );

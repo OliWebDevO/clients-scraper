@@ -26,8 +26,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ text: result.text });
   } catch (error) {
+    console.error("Failed to extract text:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to extract text" },
+      { error: "Failed to extract text" },
       { status: 500 }
     );
   }
