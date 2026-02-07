@@ -335,7 +335,7 @@ export const JobTable = React.memo(function JobTable({
                     <div className="flex justify-center">
                       <button
                         onClick={() => onToggleInvestigated(job)}
-                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
                           job.investigated
                             ? "bg-green-500 border-green-500 text-white"
                             : "border-muted-foreground/30 hover:border-green-500"
@@ -353,7 +353,7 @@ export const JobTable = React.memo(function JobTable({
                           const nextValue = job.viable === null ? true : job.viable === true ? false : null;
                           onToggleViable(job, nextValue);
                         }}
-                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
                           job.viable === true
                             ? "bg-green-500 border-green-500 text-white"
                             : job.viable === false

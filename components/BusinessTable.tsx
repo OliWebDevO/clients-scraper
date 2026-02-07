@@ -315,7 +315,7 @@ export const BusinessTable = React.memo(function BusinessTable({
                     <div className="flex justify-center">
                       <button
                         onClick={() => onToggleInvestigated(business)}
-                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
                           business.investigated
                             ? "bg-green-500 border-green-500 text-white"
                             : "border-muted-foreground/30 hover:border-green-500"
@@ -333,7 +333,7 @@ export const BusinessTable = React.memo(function BusinessTable({
                           const nextValue = business.viable === null ? true : business.viable === true ? false : null;
                           onToggleViable(business, nextValue);
                         }}
-                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        className={`shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
                           business.viable === true
                             ? "bg-green-500 border-green-500 text-white"
                             : business.viable === false
