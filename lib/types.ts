@@ -121,6 +121,9 @@ export interface JobDraft {
   ai_model: string;
   status: "pending" | "generating" | "completed" | "failed";
   error_message: string | null;
+  final_storage_path: string | null;
+  final_filename: string | null;
+  final_file_size: number | null;
   created_at: string;
 }
 

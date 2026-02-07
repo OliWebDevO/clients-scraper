@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS job_drafts (
   ai_model TEXT,
   status TEXT DEFAULT 'pending', -- 'pending', 'generating', 'completed', 'failed'
   error_message TEXT,
+  final_storage_path TEXT,
+  final_filename TEXT,
+  final_file_size INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { Sidebar } from "@/components/Sidebar";
+import { LayoutShell } from "@/components/LayoutShell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,12 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={inter.className}>
-        <div className="flex min-h-screen overflow-x-hidden">
-          <Sidebar />
-          <main className="flex-1 pt-14 lg:pt-0 lg:ml-64 min-w-0">
-            <div className="p-3 sm:p-6 lg:p-8 w-full max-w-full">{children}</div>
-          </main>
-        </div>
+        <LayoutShell>{children}</LayoutShell>
         <Toaster />
       </body>
     </html>

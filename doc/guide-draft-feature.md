@@ -2,13 +2,15 @@
 
 ## Vue d'ensemble
 
-La fonctionnalite "Draft" permet de generer automatiquement une lettre de motivation personnalisee pour chaque job, en utilisant Claude AI (Haiku).
+La fonctionnalite "Draft" permet de generer automatiquement une lettre de motivation personnalisee pour chaque job, en utilisant OpenAI (GPT-4o-mini).
+
+> **Note :** Le code supporte aussi Claude Haiku (Anthropic) en alternatif. Voir `lib/ai-customize.ts` pour basculer.
 
 **Flux :**
 1. L'utilisateur clique sur le bouton "Draft" d'un job
 2. Le systeme scrape la description complete du job
 3. Il lit le CV et la lettre de motivation uploades
-4. Claude AI personalise la lettre de motivation
+4. OpenAI personalise la lettre de motivation
 5. Un fichier DOCX est genere et telechargeable
 6. Le CV et la lettre personnalisee apparaissent dans l'onglet **Email > Drafted Jobs**
 7. L'utilisateur peut telecharger/consulter les deux documents depuis cet onglet
@@ -19,34 +21,37 @@ La fonctionnalite "Draft" permet de generer automatiquement une lettre de motiva
 ## 1. Dependances npm
 
 ```bash
-npm install @anthropic-ai/sdk pdf-parse mammoth docx
+npm install openai pdf-parse mammoth docx
 npm install --save-dev @types/pdf-parse
 ```
 
 | Package | Usage |
 |---------|-------|
-| `@anthropic-ai/sdk` | Appel Claude API |
+| `openai` | Appel OpenAI API (GPT-4o-mini) |
 | `pdf-parse` | Extraction texte depuis PDF |
 | `mammoth` | Extraction texte depuis DOCX |
 | `docx` | Generation de fichiers DOCX |
 
+> **Alternatif :** `@anthropic-ai/sdk` pour utiliser Claude Haiku a la place (deja installe)
+
 ---
 
-## 2. Cle API Anthropic
+## 2. Cle API OpenAI
 
 ### Obtenir la cle
-1. Aller sur [console.anthropic.com](https://console.anthropic.com)
+1. Aller sur [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 2. Creer un compte ou se connecter
-3. Aller dans **API Keys**
-4. Creer une nouvelle cle
+3. Creer une nouvelle cle API
 
 ### Configurer
 Ajouter dans `.env.local` :
 ```
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
 ```
 
-**Cout estime :** ~$0.008 par draft (Claude Haiku)
+**Cout estime :** ~$0.002 par draft (GPT-4o-mini)
+
+> **Alternatif (Claude Haiku) :** `ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx` (~$0.008 par draft)
 
 ---
 
@@ -95,8 +100,9 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx
 SUPABASE_SERVICE_ROLE_KEY=eyJxxx
 
-# Nouveau pour Draft
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx
+# AI pour Draft (un des deux)
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
+# ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx  (alternatif)
 ```
 
 ---
@@ -139,7 +145,7 @@ Cela permet de centraliser tous les documents prets a l'envoi pour chaque candid
 
 ## 9. Test end-to-end
 
-1. Verifier que la cle `ANTHROPIC_API_KEY` est configuree
+1. Verifier que la cle `OPENAI_API_KEY` est configuree dans `.env.local`
 2. Uploader un CV (PDF) dans l'onglet Email
 3. Uploader une lettre de motivation (DOCX ou PDF) dans l'onglet Email
 4. Aller dans **Jobs**
@@ -163,7 +169,7 @@ Cela permet de centraliser tous les documents prets a l'envoi pour chaque candid
 lib/
   document-parser.ts     # Parse PDF/DOCX -> texte
   job-description-scraper.ts  # Scrape descriptions de jobs
-  ai-customize.ts        # Appel Claude API
+  ai-customize.ts        # Appel OpenAI API (+ Anthropic en commentaire)
   docx-generator.ts      # Generation DOCX
 
 app/api/jobs/draft/stream/
@@ -184,7 +190,16 @@ app/emails/
 
 ## 11. Modele AI utilise
 
+### Actif : OpenAI GPT-4o-mini
+- **Modele :** `gpt-4o-mini`
+- **Max tokens :** 2000
+- **Cout :** ~$0.15/M input tokens, $0.60/M output tokens
+- **Estimation par draft :** ~$0.002
+
+### Alternatif : Claude Haiku (commente dans le code)
 - **Modele :** `claude-haiku-4-5-20251001`
 - **Max tokens :** 2000
 - **Cout :** ~$0.25/M input tokens, $1.25/M output tokens
 - **Estimation par draft :** ~$0.008
+
+Pour basculer, modifier `lib/ai-customize.ts` : decommenter la version Anthropic et commenter la version OpenAI.

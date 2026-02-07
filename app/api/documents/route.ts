@@ -29,16 +29,20 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Generate signed URLs for each document
+    // Generate signed URLs for each document (view + download)
     const docsWithUrls = await Promise.all(
       (data || []).map(async (doc) => {
         const { data: urlData } = await supabase.storage
           .from("documents")
-          .createSignedUrl(doc.storage_path, 3600); // 1 hour
+          .createSignedUrl(doc.storage_path, 3600);
+        const { data: dlData } = await supabase.storage
+          .from("documents")
+          .createSignedUrl(doc.storage_path, 3600, { download: doc.filename });
 
         return {
           ...doc,
           url: urlData?.signedUrl || null,
+          download_url: dlData?.signedUrl || null,
         };
       })
     );

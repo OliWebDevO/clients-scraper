@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Menu,
   X,
+  PanelLeftClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,12 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -76,13 +82,16 @@ export function Sidebar() {
       <aside
         className={cn(
           "fixed left-0 top-0 z-50 h-screen w-64 border-r border-border bg-background transition-transform duration-300 ease-in-out",
-          "lg:translate-x-0 lg:top-0",
-          isOpen ? "translate-x-0 top-14" : "-translate-x-full"
+          // Desktop: collapsed or visible
+          collapsed ? "lg:-translate-x-full" : "lg:translate-x-0",
+          // Mobile: open or hidden
+          isOpen ? "translate-x-0 top-14" : "-translate-x-full",
+          "lg:top-0"
         )}
       >
         <div className="flex h-full flex-col">
-          {/* Logo - hidden on mobile (shown in header) */}
-          <div className="hidden h-16 items-center border-b border-border px-6 lg:flex">
+          {/* Logo + collapse button - hidden on mobile (shown in header) */}
+          <div className="hidden h-16 items-center justify-between border-b border-border px-6 lg:flex">
             <Link href="/" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <Briefcase className="h-4 w-4" />
@@ -91,6 +100,15 @@ export function Sidebar() {
                 Finder
               </span>
             </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={onToggleCollapse}
+              title="Masquer le menu"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Navigation */}
@@ -138,6 +156,7 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
+
     </>
   );
 }

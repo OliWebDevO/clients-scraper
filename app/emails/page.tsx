@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import type { EmailTemplate, SentEmail, UserDocument, JobDraft } from "@/lib/types";
+import type { EmailTemplate, SentEmail, UserDocument } from "@/lib/types";
 import { EMAIL_VARIABLES } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
 import {
@@ -42,17 +42,20 @@ import {
 export default function EmailsPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
-  const [documents, setDocuments] = useState<(UserDocument & { url?: string | null })[]>([]);
-  const [drafts, setDrafts] = useState<(JobDraft & { job_title?: string; job_company?: string; download_url?: string | null; cv_url?: string | null; cv_filename?: string | null; cv_file_size?: number | null })[]>([]);
+  const [documents, setDocuments] = useState<(UserDocument & { url?: string | null; download_url?: string | null })[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [drafts, setDrafts] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<Partial<EmailTemplate> | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [uploadingFinalDraftId, setUploadingFinalDraftId] = useState<string | null>(null);
 
   const cvInputRef = useRef<HTMLInputElement>(null);
   const coverLetterInputRef = useRef<HTMLInputElement>(null);
   const proposalInputRef = useRef<HTMLInputElement>(null);
+  const finalUploadRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { toast } = useToast();
 
@@ -68,72 +71,9 @@ export default function EmailsPage() {
 
   const fetchDrafts = async () => {
     try {
-      const { data: draftsData } = await supabase
-        .from("job_drafts")
-        .select("*")
-        .eq("status", "completed")
-        .order("created_at", { ascending: false });
-
-      if (!draftsData || draftsData.length === 0) {
-        setDrafts([]);
-        return;
-      }
-
-      // Get job details for each draft
-      const jobIds = draftsData.map((d: JobDraft) => d.job_id);
-      const { data: jobsData } = await supabase
-        .from("jobs")
-        .select("id, title, company")
-        .in("id", jobIds);
-
-      const jobMap = new Map<string, { title: string; company: string | null }>();
-      jobsData?.forEach((j: { id: string; title: string; company: string | null }) => {
-        jobMap.set(j.id, { title: j.title, company: j.company });
-      });
-
-      // Get the user's CV for display alongside drafts
-      const { data: cvDocData } = await supabase
-        .from("user_documents")
-        .select("*")
-        .eq("type", "cv")
-        .single();
-
-      let cvUrl: string | null = null;
-      let cvFilename: string | null = null;
-      let cvFileSize: number | null = null;
-      if (cvDocData?.storage_path) {
-        const { data: cvSignedData } = await supabase.storage
-          .from("documents")
-          .createSignedUrl(cvDocData.storage_path, 3600);
-        cvUrl = cvSignedData?.signedUrl || null;
-        cvFilename = cvDocData.filename;
-        cvFileSize = cvDocData.file_size;
-      }
-
-      // Get download URLs for each draft
-      const enrichedDrafts = await Promise.all(
-        draftsData.map(async (draft: JobDraft) => {
-          const job = jobMap.get(draft.job_id);
-          let downloadUrl: string | null = null;
-          if (draft.storage_path) {
-            const { data: signedData } = await supabase.storage
-              .from("documents")
-              .createSignedUrl(draft.storage_path, 3600);
-            downloadUrl = signedData?.signedUrl || null;
-          }
-          return {
-            ...draft,
-            job_title: job?.title || "Unknown",
-            job_company: job?.company || "Unknown",
-            download_url: downloadUrl,
-            cv_url: cvUrl,
-            cv_filename: cvFilename,
-            cv_file_size: cvFileSize,
-          };
-        })
-      );
-
-      setDrafts(enrichedDrafts);
+      const res = await fetch("/api/jobs/drafts");
+      const result = await res.json();
+      if (result.data) setDrafts(result.data);
     } catch {
       // job_drafts table may not exist yet
     }
@@ -209,6 +149,57 @@ export default function EmailsPage() {
   const cvDoc = documents.find((d) => d.type === "cv");
   const coverLetterDoc = documents.find((d) => d.type === "cover_letter");
   const proposalDoc = documents.find((d) => d.type === "proposal_template");
+
+  const isPdf = (filename: string) => filename.toLowerCase().endsWith(".pdf");
+
+  const handleUploadFinal = async (file: File, draftId: string) => {
+    setUploadingFinalDraftId(draftId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("draftId", draftId);
+
+      const res = await fetch("/api/jobs/drafts/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Upload failed");
+
+      toast({
+        title: "Version finale uploadee",
+        description: `${file.name} uploade avec succes`,
+        variant: "success",
+      });
+      await fetchDrafts();
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Upload failed",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFinalDraftId(null);
+    }
+  };
+
+  const handleDeleteFinal = async (draftId: string) => {
+    try {
+      const res = await fetch("/api/jobs/drafts/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId }),
+      });
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      toast({ title: "Version finale supprimee" });
+      await fetchDrafts();
+    } catch {
+      toast({ title: "Erreur", description: "Echec de la suppression", variant: "destructive" });
+    }
+  };
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -352,10 +343,17 @@ export default function EmailsPage() {
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    {cvDoc.url && (
+                    {cvDoc.url && isPdf(cvDoc.filename) && (
                       <a href={cvDoc.url} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" title="View">
                           <Eye className="h-4 w-4" />
+                        </Button>
+                      </a>
+                    )}
+                    {cvDoc.download_url && (
+                      <a href={cvDoc.download_url}>
+                        <Button variant="ghost" size="icon" title="Download">
+                          <Download className="h-4 w-4" />
                         </Button>
                       </a>
                     )}
@@ -416,10 +414,17 @@ export default function EmailsPage() {
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    {coverLetterDoc.url && (
+                    {coverLetterDoc.url && isPdf(coverLetterDoc.filename) && (
                       <a href={coverLetterDoc.url} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" title="View">
                           <Eye className="h-4 w-4" />
+                        </Button>
+                      </a>
+                    )}
+                    {coverLetterDoc.download_url && (
+                      <a href={coverLetterDoc.download_url}>
+                        <Button variant="ghost" size="icon" title="Download">
+                          <Download className="h-4 w-4" />
                         </Button>
                       </a>
                     )}
@@ -480,10 +485,17 @@ export default function EmailsPage() {
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    {proposalDoc.url && (
+                    {proposalDoc.url && isPdf(proposalDoc.filename) && (
                       <a href={proposalDoc.url} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" title="View">
                           <Eye className="h-4 w-4" />
+                        </Button>
+                      </a>
+                    )}
+                    {proposalDoc.download_url && (
+                      <a href={proposalDoc.download_url}>
+                        <Button variant="ghost" size="icon" title="Download">
+                          <Download className="h-4 w-4" />
                         </Button>
                       </a>
                     )}
@@ -577,18 +589,18 @@ export default function EmailsPage() {
                       </div>
                       <div className="flex gap-1 shrink-0">
                         {draft.cv_url && (
-                          <>
-                            <a href={draft.cv_url} target="_blank" rel="noopener noreferrer">
-                              <Button variant="ghost" size="icon" title="View CV">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </a>
-                            <a href={draft.cv_url} download={draft.cv_filename || "CV.pdf"}>
-                              <Button variant="ghost" size="icon" title="Download CV">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </a>
-                          </>
+                          <a href={draft.cv_url} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="icon" title="View CV">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </a>
+                        )}
+                        {draft.cv_download_url && (
+                          <a href={draft.cv_download_url}>
+                            <Button variant="ghost" size="icon" title="Download CV">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </a>
                         )}
                       </div>
                     </div>
@@ -606,8 +618,15 @@ export default function EmailsPage() {
                         )}
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        {draft.view_url && draft.filename && isPdf(draft.filename) && (
+                          <a href={draft.view_url} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="icon" title="View Cover Letter">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </a>
+                        )}
                         {draft.download_url && (
-                          <a href={draft.download_url} download={draft.filename}>
+                          <a href={draft.download_url}>
                             <Button variant="ghost" size="icon" title="Download Cover Letter">
                               <Download className="h-4 w-4" />
                             </Button>
@@ -615,6 +634,93 @@ export default function EmailsPage() {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Final Version */}
+                  <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
+                    {draft.final_storage_path ? (
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-7 w-7 text-green-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{draft.final_filename}</p>
+                          {draft.final_file_size && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(draft.final_file_size)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
+                            <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
+                              <Button variant="ghost" size="icon" title="Voir">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          )}
+                          {draft.final_download_url && (
+                            <a href={draft.final_download_url}>
+                              <Button variant="ghost" size="icon" title="Telecharger">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Remplacer"
+                            onClick={() => finalUploadRefs.current[draft.id]?.click()}
+                            disabled={uploadingFinalDraftId === draft.id}
+                          >
+                            <Upload className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Supprimer"
+                            onClick={() => handleDeleteFinal(draft.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <input
+                          ref={(el) => { finalUploadRefs.current[draft.id] = el; }}
+                          type="file"
+                          accept=".pdf,.docx,.odt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadFinal(file, draft.id);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full cursor-pointer"
+                          onClick={() => finalUploadRefs.current[draft.id]?.click()}
+                          disabled={uploadingFinalDraftId === draft.id}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          {uploadingFinalDraftId === draft.id ? "Upload en cours..." : "Upload la version finale (.docx, .pdf, .odt)"}
+                        </Button>
+                        <input
+                          ref={(el) => { finalUploadRefs.current[draft.id] = el; }}
+                          type="file"
+                          accept=".pdf,.docx,.odt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadFinal(file, draft.id);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Re-generate hint */}

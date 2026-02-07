@@ -7,7 +7,6 @@ import {
   Building2,
   MapPin,
   Briefcase,
-  DollarSign,
   Check,
   X,
   FileText,
@@ -135,14 +134,6 @@ export function JobTable({
                 </span>
               )}
 
-              {/* Salary */}
-              {job.salary && (
-                <span className="flex items-center gap-1 text-green-400 shrink-0">
-                  <DollarSign className="h-3 w-3 shrink-0" />
-                  <span className="truncate max-w-[80px]">{job.salary}</span>
-                </span>
-              )}
-
               {/* Posted */}
               <span className="flex items-center gap-1 text-muted-foreground shrink-0">
                 <Calendar className="h-3 w-3 shrink-0" />
@@ -255,9 +246,6 @@ export function JobTable({
                   Location
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                  Salary
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
                   Source
                 </th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
@@ -334,16 +322,6 @@ export function JobTable({
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    {job.salary ? (
-                      <div className="flex items-center gap-1 text-sm">
-                        <DollarSign className="h-3 w-3 text-green-400" />
-                        <span>{job.salary}</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
                     <Badge
                       className={`font-normal ${
                         platformColors[job.source.toLowerCase()] ||
@@ -401,7 +379,7 @@ export function JobTable({
                         <button
                           onClick={() => onDraft(job)}
                           disabled={draftStatuses[job.id] === "generating"}
-                          className={`shrink-0 h-7 w-7 rounded flex items-center justify-center transition-colors ${
+                          className={`shrink-0 h-7 w-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
                             draftStatuses[job.id] === "generating"
                               ? "text-blue-400 animate-pulse"
                               : draftStatuses[job.id] === "done"

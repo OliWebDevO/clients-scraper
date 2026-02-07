@@ -7,7 +7,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, AlertCircle, Download, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Mail, FileText } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { DraftProgressUpdate } from "@/lib/types";
 
 interface DraftModalProps {
@@ -29,6 +30,7 @@ export function DraftModal({
   downloadUrl,
   downloadFilename,
 }: DraftModalProps) {
+  const router = useRouter();
   const isDone = !isGenerating && !error && downloadUrl;
   const isError = !isGenerating && error;
 
@@ -103,12 +105,15 @@ export function DraftModal({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Fermer
               </Button>
-              <a href={downloadUrl} download={downloadFilename}>
-                <Button>
-                  <Download className="mr-2 h-4 w-4" />
-                  Télécharger (.docx)
-                </Button>
-              </a>
+              <Button
+                onClick={() => {
+                  onOpenChange(false);
+                  router.push("/emails");
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Voir le mail
+              </Button>
             </div>
           </div>
         )}

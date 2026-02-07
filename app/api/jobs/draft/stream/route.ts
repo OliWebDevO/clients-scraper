@@ -7,6 +7,24 @@ import { generateDocx } from "@/lib/docx-generator";
 
 export const maxDuration = 120; // 2 minutes max
 
+/**
+ * Re-apply the blank line spacing pattern from the original text onto the AI-generated text.
+ * The AI often collapses multiple blank lines into single ones - this restores the original layout.
+ */
+function reapplySpacing(original: string, generated: string): string {
+  // Extract all newline gaps from the original (groups of 2+ consecutive newlines)
+  const originalGaps = original.match(/\n{2,}/g) || [];
+
+  // Replace each gap in the generated text with the corresponding original gap
+  let gapIndex = 0;
+  return generated.replace(/\n{2,}/g, () => {
+    if (gapIndex < originalGaps.length) {
+      return originalGaps[gapIndex++];
+    }
+    return "\n\n";
+  });
+}
+
 interface DraftRequest {
   jobId: string;
 }
@@ -115,7 +133,7 @@ export async function POST(request: NextRequest) {
           phase: "reading_documents",
         });
 
-        const cvText = await downloadAndParseDocument(cvDoc.storage_path, cvDoc.mime_type);
+        const cvResult = await downloadAndParseDocument(cvDoc.storage_path, cvDoc.mime_type);
 
         sendEvent("progress", {
           progress: 45,
@@ -123,7 +141,17 @@ export async function POST(request: NextRequest) {
           phase: "reading_documents",
         });
 
-        const coverLetterText = await downloadAndParseDocument(coverLetterDoc.storage_path, coverLetterDoc.mime_type);
+        const coverLetterResult = await downloadAndParseDocument(coverLetterDoc.storage_path, coverLetterDoc.mime_type);
+
+        const cvText = cvResult.text;
+        const coverLetterText = coverLetterResult.text;
+        const coverLetterStyle = {
+          alignment: coverLetterResult.alignment,
+          fontFamily: coverLetterResult.fontFamily,
+          fontSize: coverLetterResult.fontSize,
+          margins: coverLetterResult.margins,
+          paragraphSpacing: coverLetterResult.paragraphSpacing,
+        };
 
         if (!cvText || cvText.length < 20) {
           throw new Error("Le CV est vide ou illisible.");
@@ -141,17 +169,20 @@ export async function POST(request: NextRequest) {
         // Phase 4: AI Generation
         sendEvent("progress", {
           progress: 60,
-          message: "Personnalisation par Claude AI...",
+          message: "Personnalisation par GPT-4o-mini...",
           phase: "generating",
         });
 
-        const customizedText = await customizeCoverLetter({
+        const aiOutput = await customizeCoverLetter({
           jobTitle: job.title,
           company: job.company,
           jobDescription,
           cvText,
           coverLetterText,
         });
+
+        // Re-apply the original spacing pattern (AI often collapses blank lines)
+        const customizedText = reapplySpacing(coverLetterText, aiOutput);
 
         sendEvent("progress", {
           progress: 75,
@@ -170,7 +201,7 @@ export async function POST(request: NextRequest) {
         const filename = `Lettre_${companySlug}.docx`;
         const storagePath = `drafts/${jobId}/${filename}`;
 
-        const docxBuffer = await generateDocx(customizedText, `Cover Letter - ${job.company || job.title}`);
+        const docxBuffer = await generateDocx(customizedText, `Cover Letter - ${job.company || job.title}`, coverLetterStyle);
 
         sendEvent("progress", {
           progress: 85,
@@ -204,7 +235,7 @@ export async function POST(request: NextRequest) {
             filename,
             file_size: docxBuffer.length,
             job_description_text: jobDescription.slice(0, 5000),
-            ai_model: "claude-haiku-4-5-20251001",
+            ai_model: "gpt-4o-mini",
             status: "completed",
             error_message: null,
           },
