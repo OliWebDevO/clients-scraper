@@ -435,7 +435,7 @@ function WebsiteStatusBadge({ business, compact }: { business: Business; compact
     return (
       <Badge variant="success" className="gap-1 text-xs">
         <XCircle className="h-3 w-3" />
-        {compact ? "Pas de site" : "Pas de site"}
+        {compact ? "No site" : "No site"}
       </Badge>
     );
   }

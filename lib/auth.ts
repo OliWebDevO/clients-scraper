@@ -8,7 +8,11 @@ export interface SessionPayload {
 }
 
 function getJwtSecret(): Uint8Array {
-  return new TextEncoder().encode(process.env.JWT_SECRET!);
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+  return new TextEncoder().encode(secret);
 }
 
 export async function createSession(payload: SessionPayload): Promise<string> {

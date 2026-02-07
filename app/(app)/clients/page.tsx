@@ -63,7 +63,9 @@ export default function ClientsPage() {
     const { data, error, count } = await supabase
       .from("businesses")
       .select("id,name,address,phone,rating,review_count,category,google_maps_url,has_website,website_url,website_score,website_issues,location_query,investigated,viable,created_at,updated_at", { count: "exact" })
-      .order("created_at", { ascending: false })
+      .order("has_website", { ascending: true })
+      .order("website_score", { ascending: false, nullsFirst: false })
+      .order("review_count", { ascending: false, nullsFirst: false })
       .range(from, to);
 
     if (error) {
@@ -79,11 +81,13 @@ export default function ClientsPage() {
     setLoading(false);
   };
 
-  const fetchDraftStatuses = useCallback(async () => {
+  const fetchDraftStatuses = useCallback(async (businessIds: string[]) => {
+    if (businessIds.length === 0) return;
     try {
       const { data } = await supabase
         .from("business_drafts")
-        .select("business_id, status");
+        .select("business_id, status")
+        .in("business_id", businessIds);
 
       if (data) {
         const statuses: Record<string, "none" | "generating" | "done"> = {};
@@ -99,8 +103,11 @@ export default function ClientsPage() {
 
   useEffect(() => {
     fetchBusinesses(page);
-    fetchDraftStatuses();
   }, [page]);
+
+  useEffect(() => {
+    fetchDraftStatuses(businesses.map(b => b.id));
+  }, [businesses, fetchDraftStatuses]);
 
   // Get unique categories
   const categories = useMemo(() => {

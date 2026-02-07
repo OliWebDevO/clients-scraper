@@ -50,10 +50,12 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        // Get existing job URLs to avoid duplicates
+        // Get existing job URLs to avoid duplicates (last 30 days only)
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { data: existingJobs } = await supabase
           .from("jobs")
-          .select("url");
+          .select("url")
+          .gte("created_at", thirtyDaysAgo);
 
         const existingUrls = new Set((existingJobs || []).map(j => j.url));
         console.log(`Found ${existingUrls.size} existing jobs to exclude`);
@@ -225,27 +227,32 @@ export async function POST(request: NextRequest) {
         });
 
         let insertedCount = 0;
+        const buffer: Record<string, unknown>[] = [];
+
         for (const job of allJobs) {
           if (!job.url || !job.title) continue;
+          buffer.push({
+            title: job.title,
+            company: job.company || null,
+            location: job.location || null,
+            salary: job.salary || null,
+            description: job.description || null,
+            url: job.url,
+            source: job.source || "unknown",
+            keywords_matched: job.keywords_matched || [],
+            posted_at: job.posted_at || null,
+          });
 
-          const { error } = await supabase.from("jobs").upsert(
-            {
-              title: job.title,
-              company: job.company || null,
-              location: job.location || null,
-              salary: job.salary || null,
-              description: job.description || null,
-              url: job.url,
-              source: job.source || "unknown",
-              keywords_matched: job.keywords_matched || [],
-              posted_at: job.posted_at || null,
-            },
-            { onConflict: "url" }
-          );
-
-          if (!error) {
-            insertedCount++;
+          if (buffer.length >= 25) {
+            const { error } = await supabase.from("jobs").upsert(buffer, { onConflict: "url" });
+            if (!error) insertedCount += buffer.length;
+            buffer.length = 0;
           }
+        }
+
+        if (buffer.length > 0) {
+          const { error } = await supabase.from("jobs").upsert(buffer, { onConflict: "url" });
+          if (!error) insertedCount += buffer.length;
         }
 
         // Update scrape log

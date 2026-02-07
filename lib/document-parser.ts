@@ -93,23 +93,24 @@ async function parseDocx(buffer: Buffer): Promise<ParsedDocument> {
 
   text = text.replace(/\n{7,}/g, "\n\n\n\n\n\n").trim();
 
-  // Extract style info from DOCX XML (it's a ZIP)
-  const alignment = await extractDocxAlignment(buffer);
-  const { fontFamily, fontSize } = await extractDocxFont(buffer);
-  const margins = await extractDocxMargins(buffer);
-  const paragraphSpacing = await extractDocxParagraphSpacing(buffer);
+  // Extract style info from DOCX XML (it's a ZIP) - unzip once
+  const AdmZip = (await import("adm-zip")).default;
+  const zip = new AdmZip(buffer);
+  const stylesXml = zip.readAsText("word/styles.xml") || "";
+  const documentXml = zip.readAsText("word/document.xml") || "";
+
+  const alignment = extractDocxAlignment(stylesXml, documentXml);
+  const { fontFamily, fontSize } = extractDocxFont(stylesXml, documentXml);
+  const margins = extractDocxMargins(documentXml);
+  const paragraphSpacing = extractDocxParagraphSpacing(stylesXml, documentXml);
 
   return { text, alignment, fontFamily, fontSize, margins, paragraphSpacing };
 }
 
-async function extractDocxAlignment(buffer: Buffer): Promise<TextAlignment> {
+function extractDocxAlignment(stylesXml: string, documentXml: string): TextAlignment {
   try {
-    const AdmZip = (await import("adm-zip")).default;
-    const zip = new AdmZip(buffer);
-
     // Check default alignment from word/styles.xml
     let defaultAlign: TextAlignment = "left";
-    const stylesXml = zip.readAsText("word/styles.xml") || "";
 
     // Check docDefaults
     const docDefaultsMatch = stylesXml.match(/<w:docDefaults>[\s\S]*?<\/w:docDefaults>/);
@@ -132,7 +133,6 @@ async function extractDocxAlignment(buffer: Buffer): Promise<TextAlignment> {
     }
 
     // Count explicit alignments in document.xml
-    const documentXml = zip.readAsText("word/document.xml") || "";
     const counts: Record<TextAlignment, number> = { left: 0, center: 0, right: 0, both: 0 };
     const jcRegex = /<w:jc\s+w:val="([^"]+)"/g;
     let m;
@@ -162,13 +162,8 @@ async function extractDocxAlignment(buffer: Buffer): Promise<TextAlignment> {
   }
 }
 
-async function extractDocxFont(buffer: Buffer): Promise<{ fontFamily: string; fontSize: number }> {
+function extractDocxFont(stylesXml: string, documentXml: string): { fontFamily: string; fontSize: number } {
   try {
-    const AdmZip = (await import("adm-zip")).default;
-    const zip = new AdmZip(buffer);
-    const stylesXml = zip.readAsText("word/styles.xml") || "";
-    const documentXml = zip.readAsText("word/document.xml") || "";
-
     let fontFamily = "Calibri";
     let fontSize = 12;
 
@@ -225,12 +220,8 @@ async function extractDocxFont(buffer: Buffer): Promise<{ fontFamily: string; fo
   }
 }
 
-async function extractDocxMargins(buffer: Buffer): Promise<PageMargins | undefined> {
+function extractDocxMargins(documentXml: string): PageMargins | undefined {
   try {
-    const AdmZip = (await import("adm-zip")).default;
-    const zip = new AdmZip(buffer);
-    const documentXml = zip.readAsText("word/document.xml") || "";
-
     // Find <w:pgMar> in <w:sectPr>
     const pgMarMatch = documentXml.match(/<w:pgMar([^>]+)\/>/);
     if (!pgMarMatch) return undefined;
@@ -255,13 +246,8 @@ async function extractDocxMargins(buffer: Buffer): Promise<PageMargins | undefin
   }
 }
 
-async function extractDocxParagraphSpacing(buffer: Buffer): Promise<number | undefined> {
+function extractDocxParagraphSpacing(stylesXml: string, documentXml: string): number | undefined {
   try {
-    const AdmZip = (await import("adm-zip")).default;
-    const zip = new AdmZip(buffer);
-    const stylesXml = zip.readAsText("word/styles.xml") || "";
-    const documentXml = zip.readAsText("word/document.xml") || "";
-
     // Check default paragraph style spacing
     let defaultAfter: number | undefined;
     const defaultPStyleMatch = stylesXml.match(/<w:style\s+w:type="paragraph"\s+w:default="1"[^>]*>[\s\S]*?<\/w:style>/);

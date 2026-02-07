@@ -69,11 +69,13 @@ export default function JobsPage() {
     setLoading(false);
   };
 
-  const fetchDraftStatuses = useCallback(async () => {
+  const fetchDraftStatuses = useCallback(async (jobIds: string[]) => {
+    if (jobIds.length === 0) return;
     try {
       const { data } = await supabase
         .from("job_drafts")
-        .select("job_id, status");
+        .select("job_id, status")
+        .in("job_id", jobIds);
 
       if (data) {
         const statuses: Record<string, "none" | "generating" | "done"> = {};
@@ -89,8 +91,11 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchJobs(page);
-    fetchDraftStatuses();
   }, [page]);
+
+  useEffect(() => {
+    fetchDraftStatuses(jobs.map(j => j.id));
+  }, [jobs, fetchDraftStatuses]);
 
   // Get unique keywords
   const allKeywords = useMemo(() => {

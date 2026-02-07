@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  if (isRateLimited("auth-login", 10, 60 * 1000)) {
+    return NextResponse.json({ error: "Too many attempts" }, { status: 429 });
+  }
+
   try {
     const { email, password } = await request.json();
 

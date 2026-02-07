@@ -9,6 +9,13 @@ const ALLOWED_MIME_TYPES = [
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[^\w.\-() ]/g, "_")  // keep only safe chars
+    .replace(/\.{2,}/g, ".")       // no consecutive dots
+    .substring(0, 255);            // max length
+}
+
 // POST: Upload final version of a business draft
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload to Supabase Storage
-    const ext = file.name.split(".").pop() || "docx";
+    const ext = sanitizeFilename(file.name).split(".").pop() || "docx";
     const storagePath = `drafts/business/final/${draftId}/${crypto.randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -74,7 +81,7 @@ export async function POST(request: NextRequest) {
       .from("business_drafts")
       .update({
         final_storage_path: storagePath,
-        final_filename: file.name,
+        final_filename: sanitizeFilename(file.name),
         final_file_size: file.size,
       })
       .eq("id", draftId)

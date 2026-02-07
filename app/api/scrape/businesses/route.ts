@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
-import { scrapeGoogleMaps } from "@/lib/scrapers/google-maps";
+import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
 
 export const maxDuration = 300; // 5 minutes max
 
@@ -58,14 +58,14 @@ export async function POST(request: NextRequest) {
 
     // Run the scraper
     console.log(`Scraping NEW businesses in ${location}...`);
-    const result = await scrapeGoogleMaps({
+    const result = await scrapeGoogleMapsWithProgress({
       location,
       radius: radius || 10,
       minRating: minRating || 0,
       categories,
       excludeExisting,
       maxResults,
-    });
+    }, () => {});
 
     if (result.error) {
       if (log) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
-import { scrapeGoogleMaps } from "@/lib/scrapers/google-maps";
+import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
 import type { ScrapeSchedule, JobPlatform } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -104,12 +104,12 @@ export async function GET(request: NextRequest) {
           }
         } else if (schedule.type === "businesses") {
           // Run business scraper
-          const result = await scrapeGoogleMaps({
+          const result = await scrapeGoogleMapsWithProgress({
             location: schedule.config.location || "Belgium",
             radius: schedule.config.radius || 10,
             minRating: schedule.config.min_rating || 0,
             categories: schedule.config.categories,
-          });
+          }, () => {});
 
           for (const business of result.businesses) {
             if (!business.name) continue;

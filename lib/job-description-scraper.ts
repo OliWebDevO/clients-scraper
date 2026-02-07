@@ -19,6 +19,30 @@ const GENERIC_SELECTORS = [
   '[role="main"]',
 ];
 
+function isAllowedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    // Only allow http/https
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    // Block private/internal IPs
+    const hostname = parsed.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.") ||
+      hostname === "169.254.169.254" ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".local")
+    ) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function detectPlatform(url: string): string | null {
   const lowerUrl = url.toLowerCase();
   if (lowerUrl.includes("linkedin.com")) return "linkedin";
@@ -127,6 +151,10 @@ function cleanText(text: string): string {
 }
 
 export async function scrapeJobDescription(url: string): Promise<string> {
+  if (!isAllowedUrl(url)) {
+    throw new Error("URL not allowed: only public http/https URLs are permitted");
+  }
+
   const platform = detectPlatform(url);
 
   // Special handling for platforms that need JS rendering

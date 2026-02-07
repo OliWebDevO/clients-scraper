@@ -101,8 +101,8 @@ export default function EmailsPage() {
   const fetchData = async () => {
     setLoading(true);
     const [templatesRes, emailsRes] = await Promise.all([
-      supabase.from("email_templates").select("*").order("is_default", { ascending: false }),
-      supabase.from("sent_emails").select("*").order("sent_at", { ascending: false }).limit(20),
+      supabase.from("email_templates").select("id, name, subject, body, is_default, created_at, updated_at").order("is_default", { ascending: false }),
+      supabase.from("sent_emails").select("id, recipient_email, subject, body, status, sent_at, business_id, template_id, resend_id").order("sent_at", { ascending: false }).limit(20),
     ]);
 
     setTemplates(templatesRes.data || []);
@@ -461,8 +461,8 @@ export default function EmailsPage() {
               </div>
 
               {cvDoc ? (
-                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
-                  <div className="flex items-center gap-2 sm:gap-3">
+                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                  <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                     <FileText className="h-8 w-8 text-red-400 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{cvDoc.filename}</p>
@@ -471,7 +471,7 @@ export default function EmailsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                  <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                     {cvDoc.url && isPdf(cvDoc.filename) && (
                       <a href={cvDoc.url} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
@@ -535,8 +535,8 @@ export default function EmailsPage() {
               </div>
 
               {coverLetterDoc ? (
-                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
-                  <div className="flex items-center gap-2 sm:gap-3">
+                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                  <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                     <FileText className="h-8 w-8 text-blue-400 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{coverLetterDoc.filename}</p>
@@ -545,7 +545,7 @@ export default function EmailsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                  <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                     {coverLetterDoc.url && isPdf(coverLetterDoc.filename) && (
                       <a href={coverLetterDoc.url} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
@@ -609,8 +609,8 @@ export default function EmailsPage() {
               </div>
 
               {proposalDoc ? (
-                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
-                  <div className="flex items-center gap-2 sm:gap-3">
+                <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                  <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                     <Mail className="h-8 w-8 text-green-400 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{proposalDoc.filename}</p>
@@ -619,7 +619,7 @@ export default function EmailsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                  <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                     {proposalDoc.url && isPdf(proposalDoc.filename) && (
                       <a href={proposalDoc.url} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
@@ -712,8 +712,8 @@ export default function EmailsPage() {
                   {/* Documents grid: CV + Cover Letter */}
                   <div className="grid gap-2 sm:gap-3 sm:grid-cols-2">
                     {/* CV */}
-                    <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
-                      <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                      <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                         <FileText className="h-7 w-7 text-red-400 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-muted-foreground">CV</p>
@@ -725,7 +725,7 @@ export default function EmailsPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                      <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                         {draft.cv_url && (
                           <a href={draft.cv_url} target="_blank" rel="noopener noreferrer">
                             <Button variant="ghost" size="icon" className="h-7 w-7" title="View CV">
@@ -744,8 +744,8 @@ export default function EmailsPage() {
                     </div>
 
                     {/* Cover Letter */}
-                    <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
-                      <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                      <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                         <FileText className="h-7 w-7 text-blue-400 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-muted-foreground">Lettre de motivation</p>
@@ -757,7 +757,7 @@ export default function EmailsPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                      <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                         {draft.view_url && draft.filename && isPdf(draft.filename) && (
                           <a href={draft.view_url} target="_blank" rel="noopener noreferrer">
                             <Button variant="ghost" size="icon" className="h-7 w-7" title="View Cover Letter">
@@ -780,8 +780,8 @@ export default function EmailsPage() {
                   <div className="rounded-md border border-dashed border-border p-2 sm:p-3 space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
                     {draft.final_storage_path ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                        <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                           <FileText className="h-7 w-7 text-green-500 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{draft.final_filename}</p>
@@ -792,7 +792,7 @@ export default function EmailsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                        <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                           {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
                             <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
                               <Button variant="ghost" size="icon" className="h-7 w-7" title="Voir">
@@ -911,8 +911,8 @@ export default function EmailsPage() {
                   </div>
 
                   {/* Proposal document */}
-                  <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2">
-                    <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                    <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                       <FileText className="h-7 w-7 text-green-400 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-muted-foreground">Proposition</p>
@@ -924,7 +924,7 @@ export default function EmailsPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                    <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                       {draft.download_url && (
                         <a href={draft.download_url}>
                           <Button variant="ghost" size="icon" className="h-7 w-7" title="Download Proposal">
@@ -939,8 +939,8 @@ export default function EmailsPage() {
                   <div className="rounded-md border border-dashed border-border p-2 sm:p-3 space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
                     {draft.final_storage_path ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                        <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
                           <FileText className="h-7 w-7 text-green-500 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{draft.final_filename}</p>
@@ -951,7 +951,7 @@ export default function EmailsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1 border-t border-border/50 pt-1.5">
+                        <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
                           {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
                             <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
                               <Button variant="ghost" size="icon" className="h-7 w-7" title="Voir">

@@ -18,6 +18,13 @@ const ALLOWED_MIME_TYPES: Record<string, string[]> = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[^\w.\-() ]/g, "_")  // keep only safe chars
+    .replace(/\.{2,}/g, ".")       // no consecutive dots
+    .substring(0, 255);            // max length
+}
+
 // GET: List all user documents
 export async function GET() {
   try {
@@ -110,7 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload to Supabase Storage
-    const ext = file.name.split(".").pop() || "pdf";
+    const ext = sanitizeFilename(file.name).split(".").pop() || "pdf";
     const storagePath = `${type}/${crypto.randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -128,7 +135,7 @@ export async function POST(request: NextRequest) {
       .from("user_documents")
       .insert({
         type,
-        filename: file.name,
+        filename: sanitizeFilename(file.name),
         storage_path: storagePath,
         mime_type: file.type,
         file_size: file.size,

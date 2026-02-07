@@ -53,51 +53,58 @@ export async function GET() {
       cvFileSize = cvDocData.file_size;
     }
 
-    // Enrich each draft with URLs
-    const enrichedDrafts = await Promise.all(
-      draftsData.map(async (draft: JobDraft) => {
-        const job = jobMap.get(draft.job_id);
-        let viewUrl: string | null = null;
-        let downloadUrl: string | null = null;
-        if (draft.storage_path) {
-          const { data: viewData } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(draft.storage_path, 3600);
-          viewUrl = viewData?.signedUrl || null;
-          const { data: dlData } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(draft.storage_path, 3600, { download: draft.filename || "cover_letter.docx" });
-          downloadUrl = dlData?.signedUrl || null;
-        }
-        // Final version URLs
-        let finalViewUrl: string | null = null;
-        let finalDownloadUrl: string | null = null;
-        if (draft.final_storage_path) {
-          const { data: fViewData } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(draft.final_storage_path, 3600);
-          finalViewUrl = fViewData?.signedUrl || null;
-          const { data: fDlData } = await supabase.storage
-            .from("documents")
-            .createSignedUrl(draft.final_storage_path, 3600, { download: draft.final_filename || "final.docx" });
-          finalDownloadUrl = fDlData?.signedUrl || null;
-        }
+    // Batch all signed URL requests
+    const storagePaths: { path: string; download?: string }[] = [];
+    const pathIndexMap: { draftIdx: number; field: string }[] = [];
 
-        return {
-          ...draft,
-          job_title: job?.title || "Unknown",
-          job_company: job?.company || "Unknown",
-          view_url: viewUrl,
-          download_url: downloadUrl,
-          cv_url: cvUrl,
-          cv_download_url: cvDownloadUrl,
-          cv_filename: cvFilename,
-          cv_file_size: cvFileSize,
-          final_view_url: finalViewUrl,
-          final_download_url: finalDownloadUrl,
-        };
-      })
+    draftsData.forEach((draft: JobDraft, i: number) => {
+      if (draft.storage_path) {
+        pathIndexMap.push({ draftIdx: i, field: "view_url" });
+        storagePaths.push({ path: draft.storage_path });
+        pathIndexMap.push({ draftIdx: i, field: "download_url" });
+        storagePaths.push({ path: draft.storage_path, download: draft.filename || "cover_letter.docx" });
+      }
+      if (draft.final_storage_path) {
+        pathIndexMap.push({ draftIdx: i, field: "final_view_url" });
+        storagePaths.push({ path: draft.final_storage_path });
+        pathIndexMap.push({ draftIdx: i, field: "final_download_url" });
+        storagePaths.push({ path: draft.final_storage_path, download: draft.final_filename || "final.docx" });
+      }
+    });
+
+    const signedUrlResults = await Promise.all(
+      storagePaths.map(({ path, download }) =>
+        download
+          ? supabase.storage.from("documents").createSignedUrl(path, 3600, { download })
+          : supabase.storage.from("documents").createSignedUrl(path, 3600)
+      )
     );
+
+    // Build URL maps per draft
+    const draftUrls: Record<number, Record<string, string | null>> = {};
+    signedUrlResults.forEach((result, i) => {
+      const { draftIdx, field } = pathIndexMap[i];
+      if (!draftUrls[draftIdx]) draftUrls[draftIdx] = {};
+      draftUrls[draftIdx][field] = result.data?.signedUrl || null;
+    });
+
+    const enrichedDrafts = draftsData.map((draft: JobDraft, i: number) => {
+      const job = jobMap.get(draft.job_id);
+      const urls = draftUrls[i] || {};
+      return {
+        ...draft,
+        job_title: job?.title || "Unknown",
+        job_company: job?.company || "Unknown",
+        view_url: urls.view_url || null,
+        download_url: urls.download_url || null,
+        cv_url: cvUrl,
+        cv_download_url: cvDownloadUrl,
+        cv_filename: cvFilename,
+        cv_file_size: cvFileSize,
+        final_view_url: urls.final_view_url || null,
+        final_download_url: urls.final_download_url || null,
+      };
+    });
 
     return NextResponse.json({ data: enrichedDrafts });
   } catch (error) {
