@@ -123,6 +123,22 @@ CREATE TABLE IF NOT EXISTS job_drafts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Business drafts (AI-generated proposals)
+CREATE TABLE IF NOT EXISTS business_drafts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID UNIQUE REFERENCES businesses(id) ON DELETE CASCADE,
+  storage_path TEXT,
+  filename TEXT,
+  file_size INTEGER,
+  ai_model TEXT,
+  status TEXT DEFAULT 'pending', -- 'pending', 'generating', 'completed', 'failed'
+  error_message TEXT,
+  final_storage_path TEXT,
+  final_filename TEXT,
+  final_file_size INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_businesses_location ON businesses(location_query);
 CREATE INDEX IF NOT EXISTS idx_businesses_rating ON businesses(rating);
@@ -135,6 +151,8 @@ CREATE INDEX IF NOT EXISTS idx_scrape_schedules_next_run ON scrape_schedules(nex
 CREATE INDEX IF NOT EXISTS idx_sent_emails_business ON sent_emails(business_id);
 CREATE INDEX IF NOT EXISTS idx_job_drafts_job_id ON job_drafts(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_drafts_status ON job_drafts(status);
+CREATE INDEX IF NOT EXISTS idx_business_drafts_business_id ON business_drafts(business_id);
+CREATE INDEX IF NOT EXISTS idx_business_drafts_status ON business_drafts(status);
 
 -- Enable Row Level Security (optional, for production)
 -- ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;

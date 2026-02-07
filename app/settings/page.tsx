@@ -121,6 +121,8 @@ export default function SettingsPage() {
     if (next <= now) {
       if (schedule.frequency === "daily") {
         next.setDate(next.getDate() + 1);
+      } else if (schedule.frequency === "every_3_days") {
+        next.setDate(next.getDate() + 3);
       } else if (schedule.frequency === "weekly" && schedule.day_of_week != null) {
         next.setDate(next.getDate() + ((7 + (schedule.day_of_week ?? 0) - now.getDay()) % 7 || 7));
       }
@@ -243,7 +245,9 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground">
                         {schedule.frequency === "daily"
                           ? `Daily at ${schedule.time_of_day}`
-                          : `Weekly on ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][schedule.day_of_week || 0]} at ${schedule.time_of_day}`}
+                          : schedule.frequency === "every_3_days"
+                            ? `Every 3 days at ${schedule.time_of_day}`
+                            : `Weekly on ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][schedule.day_of_week || 0]} at ${schedule.time_of_day}`}
                       </p>
                     </div>
                   </div>
@@ -307,7 +311,7 @@ export default function SettingsPage() {
                   onValueChange={(v) =>
                     setCurrentSchedule((prev) => ({
                       ...prev,
-                      frequency: v as "daily" | "weekly",
+                      frequency: v as "daily" | "every_3_days" | "weekly",
                     }))
                   }
                 >
@@ -316,6 +320,7 @@ export default function SettingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="every_3_days">Every 3 days</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
                   </SelectContent>
                 </Select>

@@ -19,6 +19,7 @@ interface DraftModalProps {
   error: string | null;
   downloadUrl: string | null;
   downloadFilename: string | null;
+  title?: string;
 }
 
 export function DraftModal({
@@ -29,6 +30,7 @@ export function DraftModal({
   error,
   downloadUrl,
   downloadFilename,
+  title = "Draft Cover Letter",
 }: DraftModalProps) {
   const router = useRouter();
   const isDone = !isGenerating && !error && downloadUrl;
@@ -40,7 +42,7 @@ export function DraftModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Draft Cover Letter
+            {title}
           </DialogTitle>
         </DialogHeader>
 

@@ -201,6 +201,8 @@ function calculateNextRun(schedule: ScrapeSchedule): string {
 
   if (schedule.frequency === "daily") {
     next.setDate(next.getDate() + 1);
+  } else if (schedule.frequency === "every_3_days") {
+    next.setDate(next.getDate() + 3);
   } else if (schedule.frequency === "weekly") {
     const daysUntilNext = (7 + (schedule.day_of_week ?? 1) - now.getDay()) % 7 || 7;
     next.setDate(next.getDate() + daysUntilNext);

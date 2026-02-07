@@ -50,7 +50,7 @@ export interface ScrapeSchedule {
   name: string;
   type: "businesses" | "jobs";
   enabled: boolean;
-  frequency: "daily" | "weekly" | "custom";
+  frequency: "daily" | "every_3_days" | "weekly";
   time_of_day: string;
   day_of_week: number | null;
   config: ScheduleConfig;
@@ -118,6 +118,21 @@ export interface JobDraft {
   filename: string;
   file_size: number;
   job_description_text: string | null;
+  ai_model: string;
+  status: "pending" | "generating" | "completed" | "failed";
+  error_message: string | null;
+  final_storage_path: string | null;
+  final_filename: string | null;
+  final_file_size: number | null;
+  created_at: string;
+}
+
+export interface BusinessDraft {
+  id: string;
+  business_id: string;
+  storage_path: string;
+  filename: string;
+  file_size: number;
   ai_model: string;
   status: "pending" | "generating" | "completed" | "failed";
   error_message: string | null;
@@ -255,6 +270,11 @@ export type Database = {
         Row: JobDraft;
         Insert: Partial<JobDraft>;
         Update: Partial<JobDraft>;
+      };
+      business_drafts: {
+        Row: BusinessDraft;
+        Insert: Partial<BusinessDraft>;
+        Update: Partial<BusinessDraft>;
       };
     };
   };

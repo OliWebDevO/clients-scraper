@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { BusinessTable } from "@/components/BusinessTable";
 import { FilterPanel } from "@/components/FilterPanel";
@@ -10,9 +10,10 @@ import {
   ProgressUpdate,
 } from "@/components/ScrapeBusinessModal";
 import { SendEmailModal } from "@/components/SendEmailModal";
+import { DraftModal } from "@/components/DraftModal";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import type { Business } from "@/lib/types";
+import type { Business, DraftProgressUpdate } from "@/lib/types";
 import { exportToCSV } from "@/lib/utils";
 import { Play, Download, Mail, Users, RefreshCw } from "lucide-react";
 
@@ -28,6 +29,16 @@ export default function ClientsPage() {
   const [isScraping, setIsScraping] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState<ProgressUpdate | null>(null);
+
+  // Draft states
+  const [draftModalOpen, setDraftModalOpen] = useState(false);
+  const [draftBusiness, setDraftBusiness] = useState<Business | null>(null);
+  const [isDraftGenerating, setIsDraftGenerating] = useState(false);
+  const [draftProgress, setDraftProgress] = useState<DraftProgressUpdate | null>(null);
+  const [draftDownloadUrl, setDraftDownloadUrl] = useState<string | null>(null);
+  const [draftDownloadFilename, setDraftDownloadFilename] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftStatuses, setDraftStatuses] = useState<Record<string, "none" | "generating" | "done">>({});
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,8 +71,27 @@ export default function ClientsPage() {
     setLoading(false);
   };
 
+  const fetchDraftStatuses = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from("business_drafts")
+        .select("business_id, status");
+
+      if (data) {
+        const statuses: Record<string, "none" | "generating" | "done"> = {};
+        data.forEach((d: { business_id: string; status: string }) => {
+          statuses[d.business_id] = d.status === "completed" ? "done" : "none";
+        });
+        setDraftStatuses(statuses);
+      }
+    } catch {
+      // business_drafts table may not exist yet
+    }
+  }, []);
+
   useEffect(() => {
     fetchBusinesses();
+    fetchDraftStatuses();
   }, []);
 
   // Get unique categories
@@ -355,6 +385,77 @@ export default function ClientsPage() {
     }
   };
 
+  const handleDraft = async (business: Business) => {
+    setDraftBusiness(business);
+    setDraftModalOpen(true);
+    setIsDraftGenerating(true);
+    setDraftProgress({ progress: 0, message: "Demarrage...", phase: "init" });
+    setDraftDownloadUrl(null);
+    setDraftDownloadFilename(null);
+    setDraftError(null);
+    setDraftStatuses(prev => ({ ...prev, [business.id]: "generating" }));
+
+    try {
+      const response = await fetch("/api/businesses/draft/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: business.id }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Erreur de connexion au serveur");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("Impossible de lire le stream");
+      }
+
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const chunk of lines) {
+          if (!chunk.trim()) continue;
+
+          const eventMatch = chunk.match(/event: (\w+)/);
+          const dataMatch = chunk.match(/data: (.+)/);
+
+          if (eventMatch && dataMatch) {
+            const eventType = eventMatch[1];
+            const data = JSON.parse(dataMatch[1]);
+
+            switch (eventType) {
+              case "progress":
+                setDraftProgress(data);
+                break;
+              case "complete":
+                setDraftDownloadUrl(data.downloadUrl);
+                setDraftDownloadFilename(data.filename);
+                setIsDraftGenerating(false);
+                setDraftStatuses(prev => ({ ...prev, [business.id]: "done" }));
+                break;
+              case "error":
+                throw new Error(data.message);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "Erreur inconnue");
+      setIsDraftGenerating(false);
+      setDraftStatuses(prev => ({ ...prev, [business.id]: "none" }));
+    }
+  };
+
   const handleExport = () => {
     const dataToExport = selectedIds.length > 0
       ? filteredBusinesses.filter((b) => selectedIds.includes(b.id))
@@ -443,6 +544,8 @@ export default function ClientsPage() {
           onSendEmail={handleSendEmail}
           onToggleInvestigated={handleToggleInvestigated}
           onToggleViable={handleToggleViable}
+          onDraft={handleDraft}
+          draftStatuses={draftStatuses}
         />
       )}
 
@@ -461,6 +564,17 @@ export default function ClientsPage() {
         business={selectedBusiness}
         onSend={handleEmailSend}
         isLoading={isSendingEmail}
+      />
+
+      <DraftModal
+        open={draftModalOpen}
+        onOpenChange={setDraftModalOpen}
+        isGenerating={isDraftGenerating}
+        progress={draftProgress}
+        error={draftError}
+        downloadUrl={draftDownloadUrl}
+        downloadFilename={draftDownloadFilename}
+        title="Draft Proposal"
       />
     </div>
   );

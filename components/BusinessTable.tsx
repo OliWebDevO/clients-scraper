@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   XCircle,
   X,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +28,8 @@ interface BusinessTableProps {
   onSendEmail: (business: Business) => void;
   onToggleInvestigated: (business: Business) => void;
   onToggleViable: (business: Business, value: boolean | null) => void;
+  onDraft?: (business: Business) => void;
+  draftStatuses?: Record<string, "none" | "generating" | "done">;
 }
 
 export function BusinessTable({
@@ -35,6 +39,8 @@ export function BusinessTable({
   onSendEmail,
   onToggleInvestigated,
   onToggleViable,
+  onDraft,
+  draftStatuses = {},
 }: BusinessTableProps) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
@@ -172,6 +178,22 @@ export function BusinessTable({
                 <span className="text-xs text-muted-foreground">Viable</span>
               </div>
               <div className="flex-1" />
+              {onDraft && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDraft(business)}
+                  disabled={draftStatuses[business.id] === "generating"}
+                  className="shrink-0"
+                >
+                  {draftStatuses[business.id] === "generating" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className={`mr-2 h-4 w-4 ${draftStatuses[business.id] === "done" ? "text-blue-500" : ""}`} />
+                  )}
+                  Draft
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -227,11 +249,14 @@ export function BusinessTable({
                 <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
                   Status
                 </th>
-                <th className="w-12 px-2 py-3 text-center text-sm font-medium text-muted-foreground">
+                <th className="w-14 px-3 py-3 text-center text-sm font-medium text-muted-foreground">
                   Vu
                 </th>
-                <th className="w-12 px-2 py-3 text-center text-sm font-medium text-muted-foreground">
+                <th className="w-14 px-3 py-3 text-center text-sm font-medium text-muted-foreground">
                   Viable
+                </th>
+                <th className="w-14 px-3 py-3 text-center text-sm font-medium text-muted-foreground">
+                  Draft
                 </th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Actions
@@ -292,7 +317,7 @@ export function BusinessTable({
                   <td className="px-4 py-3">
                     <WebsiteStatusBadge business={business} />
                   </td>
-                  <td className="px-2 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex justify-center">
                       <button
                         onClick={() => onToggleInvestigated(business)}
@@ -307,7 +332,7 @@ export function BusinessTable({
                       </button>
                     </div>
                   </td>
-                  <td className="px-2 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex justify-center">
                       <button
                         onClick={() => {
@@ -326,6 +351,38 @@ export function BusinessTable({
                         {business.viable === true && <Check className="h-3 w-3" />}
                         {business.viable === false && <X className="h-3 w-3" />}
                       </button>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex justify-center">
+                      {onDraft ? (
+                        <button
+                          onClick={() => onDraft(business)}
+                          disabled={draftStatuses[business.id] === "generating"}
+                          className={`shrink-0 h-7 w-7 rounded flex items-center justify-center transition-colors cursor-pointer ${
+                            draftStatuses[business.id] === "generating"
+                              ? "text-blue-400 animate-pulse"
+                              : draftStatuses[business.id] === "done"
+                              ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
+                              : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted"
+                          }`}
+                          title={
+                            draftStatuses[business.id] === "generating"
+                              ? "Generating..."
+                              : draftStatuses[business.id] === "done"
+                              ? "Re-generate draft"
+                              : "Generate draft proposal"
+                          }
+                        >
+                          {draftStatuses[business.id] === "generating" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FileText className="h-4 w-4" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground/30">&mdash;</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">

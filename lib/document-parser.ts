@@ -46,7 +46,11 @@ export async function downloadAndParseDocument(storagePath: string, mimeType: st
     return parseOdt(buffer);
   }
 
-  throw new Error(`Unsupported document format: ${mimeType}. Only PDF, DOCX and ODT are supported.`);
+  if (mimeType === "text/plain" || storagePath.endsWith(".txt")) {
+    return { text: buffer.toString("utf-8"), alignment: "left", fontFamily: "Calibri", fontSize: 12 };
+  }
+
+  throw new Error(`Unsupported document format: ${mimeType}. Only PDF, DOCX, ODT and TXT are supported.`);
 }
 
 async function parsePdf(buffer: Buffer): Promise<string> {

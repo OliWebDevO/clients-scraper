@@ -25,7 +25,7 @@ export async function sendEmail({
   to,
   subject,
   html,
-  from = "Clients Scraper <onboarding@resend.dev>",
+  from = "Oliver Van Droogenbroeck <webdev@olivervdb.com>",
 }: SendEmailParams) {
   const resend = getResendClient();
 

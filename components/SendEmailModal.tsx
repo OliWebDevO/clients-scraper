@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Mail, FileText, Eye } from "lucide-react";
+import { Loader2, Mail, FileText, Eye, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate } from "@/lib/types";
 import { replaceTemplateVariables, extractCity } from "@/lib/utils";
@@ -32,6 +32,8 @@ interface SendEmailModalProps {
   business: Business | null;
   onSend: (data: { subject: string; body: string; recipientEmail: string }) => void;
   isLoading: boolean;
+  draftBody?: string | null;
+  draftSubject?: string | null;
 }
 
 export function SendEmailModal({
@@ -40,6 +42,8 @@ export function SendEmailModal({
   business,
   onSend,
   isLoading,
+  draftBody,
+  draftSubject,
 }: SendEmailModalProps) {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -65,16 +69,27 @@ export function SendEmailModal({
     }
     if (open) {
       fetchTemplates();
+      // Auto-select draft tab if draft content is available
+      if (draftBody) {
+        setActiveTab("draft");
+        setSubject(draftSubject || `Proposition — ${business?.name || ""}`);
+        setBody(draftBody);
+      } else {
+        setActiveTab("template");
+      }
     }
   }, [open]);
 
   useEffect(() => {
-    if (selectedTemplateId && activeTab === "template") {
+    if (activeTab === "template" && selectedTemplateId) {
       const template = templates.find((t) => t.id === selectedTemplateId);
       if (template) {
         setSubject(template.subject);
         setBody(template.body);
       }
+    } else if (activeTab === "draft" && draftBody) {
+      setSubject(draftSubject || `Proposition — ${business?.name || ""}`);
+      setBody(draftBody);
     }
   }, [selectedTemplateId, templates, activeTab]);
 
@@ -134,16 +149,36 @@ export function SendEmailModal({
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className={`grid w-full ${draftBody ? "grid-cols-3" : "grid-cols-2"}`}>
+              {draftBody && (
+                <TabsTrigger value="draft" className="gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Brouillon
+                </TabsTrigger>
+              )}
               <TabsTrigger value="template" className="gap-2">
                 <FileText className="h-4 w-4" />
-                Use Template
+                Template
               </TabsTrigger>
               <TabsTrigger value="custom" className="gap-2">
                 <Mail className="h-4 w-4" />
-                Custom Email
+                Custom
               </TabsTrigger>
             </TabsList>
+
+            {draftBody && (
+              <TabsContent value="draft" className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="draftSubject">Sujet</Label>
+                  <Input
+                    id="draftSubject"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    required
+                  />
+                </div>
+              </TabsContent>
+            )}
 
             <TabsContent value="template" className="space-y-4">
               <div className="space-y-2">

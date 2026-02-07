@@ -16,9 +16,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SendEmailModal } from "@/components/SendEmailModal";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import type { EmailTemplate, SentEmail, UserDocument } from "@/lib/types";
+import type { Business, EmailTemplate, SentEmail, UserDocument } from "@/lib/types";
 import { EMAIL_VARIABLES } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
 import {
@@ -45,17 +46,25 @@ export default function EmailsPage() {
   const [documents, setDocuments] = useState<(UserDocument & { url?: string | null; download_url?: string | null })[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [drafts, setDrafts] = useState<Record<string, any>[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [businessDrafts, setBusinessDrafts] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<Partial<EmailTemplate> | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [uploadingFinalDraftId, setUploadingFinalDraftId] = useState<string | null>(null);
+  const [uploadingFinalBusinessDraftId, setUploadingFinalBusinessDraftId] = useState<string | null>(null);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailBusiness, setEmailBusiness] = useState<Business | null>(null);
+  const [emailDraftBody, setEmailDraftBody] = useState<string | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const cvInputRef = useRef<HTMLInputElement>(null);
   const coverLetterInputRef = useRef<HTMLInputElement>(null);
   const proposalInputRef = useRef<HTMLInputElement>(null);
   const finalUploadRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const businessFinalUploadRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { toast } = useToast();
 
@@ -79,6 +88,16 @@ export default function EmailsPage() {
     }
   };
 
+  const fetchBusinessDrafts = async () => {
+    try {
+      const res = await fetch("/api/businesses/drafts");
+      const result = await res.json();
+      if (result.data) setBusinessDrafts(result.data);
+    } catch {
+      // business_drafts table may not exist yet
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     const [templatesRes, emailsRes] = await Promise.all([
@@ -88,7 +107,7 @@ export default function EmailsPage() {
 
     setTemplates(templatesRes.data || []);
     setSentEmails(emailsRes.data || []);
-    await Promise.all([fetchDocuments(), fetchDrafts()]);
+    await Promise.all([fetchDocuments(), fetchDrafts(), fetchBusinessDrafts()]);
     setLoading(false);
   };
 
@@ -198,6 +217,114 @@ export default function EmailsPage() {
       await fetchDrafts();
     } catch {
       toast({ title: "Erreur", description: "Echec de la suppression", variant: "destructive" });
+    }
+  };
+
+  const handleUploadBusinessFinal = async (file: File, draftId: string) => {
+    setUploadingFinalBusinessDraftId(draftId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("draftId", draftId);
+
+      const res = await fetch("/api/businesses/drafts/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Upload failed");
+
+      toast({
+        title: "Version finale uploadee",
+        description: `${file.name} uploade avec succes`,
+        variant: "success",
+      });
+      await fetchBusinessDrafts();
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Upload failed",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFinalBusinessDraftId(null);
+    }
+  };
+
+  const handleDeleteBusinessFinal = async (draftId: string) => {
+    try {
+      const res = await fetch("/api/businesses/drafts/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId }),
+      });
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      toast({ title: "Version finale supprimee" });
+      await fetchBusinessDrafts();
+    } catch {
+      toast({ title: "Erreur", description: "Echec de la suppression", variant: "destructive" });
+    }
+  };
+
+  const handleSendEmailToBusiness = async (business: Business, draftId?: string) => {
+    setEmailBusiness(business);
+    setEmailDraftBody(null);
+
+    if (draftId) {
+      try {
+        const res = await fetch(`/api/businesses/drafts/text?draftId=${draftId}`);
+        const result = await res.json();
+        if (result.text) {
+          setEmailDraftBody(result.text);
+        }
+      } catch {
+        // If text extraction fails, open modal without draft
+      }
+    }
+
+    setEmailModalOpen(true);
+  };
+
+  const handleEmailSend = async (data: {
+    subject: string;
+    body: string;
+    recipientEmail: string;
+  }) => {
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch("/api/emails/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...data,
+          businessId: emailBusiness?.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Email envoye",
+          description: `Email envoye a ${data.recipientEmail}`,
+          variant: "success",
+        });
+        setEmailModalOpen(false);
+        fetchData();
+      } else {
+        throw new Error(result.error || "Failed to send email");
+      }
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Echec de l'envoi",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -734,6 +861,173 @@ export default function EmailsPage() {
         </Card>
       )}
 
+      {/* Drafted Clients */}
+      {businessDrafts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Drafted Clients
+              <Badge variant="secondary" className="ml-2">{businessDrafts.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {businessDrafts.map((draft) => (
+                <div
+                  key={draft.id}
+                  className="rounded-lg border border-border p-4 space-y-3"
+                >
+                  {/* Business info */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-medium truncate">{draft.business_name}</h3>
+                      {draft.business_category && (
+                        <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground">
+                          <Building2 className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{draft.business_category}</span>
+                        </div>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-xs text-green-500 border-green-500/30">
+                      Generated
+                    </Badge>
+                  </div>
+
+                  {/* Proposal document */}
+                  <div className="flex items-center gap-3 rounded-md bg-muted/50 p-3">
+                    <FileText className="h-7 w-7 text-green-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground">Proposition</p>
+                      <p className="text-sm font-medium truncate">{draft.filename}</p>
+                      {draft.file_size && (
+                        <p className="text-xs text-muted-foreground">
+                          {(draft.file_size / 1024).toFixed(1)} KB
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {draft.download_url && (
+                        <a href={draft.download_url}>
+                          <Button variant="ghost" size="icon" title="Download Proposal">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Final Version */}
+                  <div className="rounded-md border border-dashed border-border p-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
+                    {draft.final_storage_path ? (
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-7 w-7 text-green-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{draft.final_filename}</p>
+                          {draft.final_file_size && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatFileSize(draft.final_file_size)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
+                            <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
+                              <Button variant="ghost" size="icon" title="Voir">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          )}
+                          {draft.final_download_url && (
+                            <a href={draft.final_download_url}>
+                              <Button variant="ghost" size="icon" title="Telecharger">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Remplacer"
+                            onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
+                            disabled={uploadingFinalBusinessDraftId === draft.id}
+                          >
+                            <Upload className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Supprimer"
+                            onClick={() => handleDeleteBusinessFinal(draft.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <input
+                          ref={(el) => { businessFinalUploadRefs.current[draft.id] = el; }}
+                          type="file"
+                          accept=".pdf,.docx,.odt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadBusinessFinal(file, draft.id);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full cursor-pointer"
+                          onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
+                          disabled={uploadingFinalBusinessDraftId === draft.id}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          {uploadingFinalBusinessDraftId === draft.id ? "Upload en cours..." : "Upload la version finale (.docx, .pdf, .odt)"}
+                        </Button>
+                        <input
+                          ref={(el) => { businessFinalUploadRefs.current[draft.id] = el; }}
+                          type="file"
+                          accept=".pdf,.docx,.odt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadBusinessFinal(file, draft.id);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Send email button */}
+                  {draft.business && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => handleSendEmailToBusiness(draft.business, draft.id)}
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      Envoyer un mail a {draft.business_name}
+                    </Button>
+                  )}
+
+                  {/* Re-generate hint */}
+                  <p className="text-xs text-muted-foreground">
+                    Pour re-generer, cliquez sur le bouton Draft du client dans l&apos;onglet <a href="/clients" className="underline hover:text-foreground transition-colors">Clients</a>.
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Templates Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
@@ -964,6 +1258,15 @@ export default function EmailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SendEmailModal
+        open={emailModalOpen}
+        onOpenChange={setEmailModalOpen}
+        business={emailBusiness}
+        onSend={handleEmailSend}
+        isLoading={isSendingEmail}
+        draftBody={emailDraftBody}
+      />
     </div>
   );
 }
