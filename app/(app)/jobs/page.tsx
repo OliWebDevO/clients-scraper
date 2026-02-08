@@ -119,8 +119,9 @@ export default function JobsPage() {
       }
     }
 
-    // Order & paginate
+    // Order & paginate (Brussels first, then by date)
     query = query
+      .order("location_priority", { ascending: true })
       .order("created_at", { ascending: false })
       .range(from, to);
 

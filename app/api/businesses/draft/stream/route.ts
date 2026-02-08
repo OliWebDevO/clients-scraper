@@ -182,6 +182,7 @@ export async function POST(request: NextRequest) {
             ai_model: "gpt-4o-mini",
             status: "completed",
             error_message: null,
+            created_at: new Date().toISOString(),
           },
           { onConflict: "business_id" }
         );

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
 import { expandKeywords } from "@/lib/scrapers/base";
+import { scrapeJobDescription } from "@/lib/job-description-scraper";
 import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 import type { JobPlatform, Job } from "@/lib/types";
 
@@ -257,11 +258,57 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Phase: Scrape job descriptions in parallel batches
+        const jobsNeedingDescription = allJobs.filter(j => !j.description && j.url);
+        if (jobsNeedingDescription.length > 0) {
+          sendEvent("progress", {
+            current: 0,
+            total: jobsNeedingDescription.length,
+            progress: 82,
+            message: `Récupération des descriptions (0/${jobsNeedingDescription.length})...`,
+            phase: "descriptions",
+          });
+
+          const BATCH_SIZE = 3;
+          let scraped = 0;
+
+          for (let i = 0; i < jobsNeedingDescription.length; i += BATCH_SIZE) {
+            const batch = jobsNeedingDescription.slice(i, i + BATCH_SIZE);
+            const results = await Promise.allSettled(
+              batch.map(async (job) => {
+                try {
+                  const description = await Promise.race([
+                    scrapeJobDescription(job.url!),
+                    new Promise<string>((_, reject) =>
+                      setTimeout(() => reject(new Error("timeout")), 20000)
+                    ),
+                  ]);
+                  if (description && description.length > 50) {
+                    job.description = description;
+                  }
+                } catch {
+                  // Description unavailable for this job - continue
+                }
+              })
+            );
+
+            scraped += results.length;
+            const withDesc = allJobs.filter(j => j.description && j.description.length > 50).length;
+            sendEvent("progress", {
+              current: scraped,
+              total: jobsNeedingDescription.length,
+              progress: 82 + Math.round((scraped / jobsNeedingDescription.length) * 10),
+              message: `Descriptions: ${withDesc}/${scraped} récupérées...`,
+              phase: "descriptions",
+            });
+          }
+        }
+
         // Insert jobs into database
         sendEvent("progress", {
           current: platforms.length,
           total: platforms.length,
-          progress: 85,
+          progress: 93,
           message: `Sauvegarde de ${allJobs.length} offres...`,
           phase: "saving",
         });

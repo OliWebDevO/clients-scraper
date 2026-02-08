@@ -11,6 +11,7 @@ interface ActirisItem {
   codePostal: string | null;
   typeContrat: string | null;
   typeContratLibelle: string | null;
+  typeOffre: string | null;
   dateCreation: string | null;
 }
 
@@ -55,7 +56,7 @@ export class ActirisScraper extends BaseScraper {
             const title = item.titreFr || item.titreNl;
             if (!title) continue;
 
-            const url = `${this.baseUrl}/fr/citoyens/trouver-un-emploi/offres-d-emploi/${item.reference}`;
+            const url = `${this.baseUrl}/fr/citoyens/offres-d-emploi/detail-offre-d-emploi/?reference=${item.reference}&type=${item.typeOffre || "Hrxml"}`;
 
             // Check for duplicates
             if (jobs.some((j) => j.url === url)) continue;

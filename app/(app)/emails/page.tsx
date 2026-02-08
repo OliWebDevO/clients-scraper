@@ -719,6 +719,16 @@ export default function EmailsPage() {
                         <Building2 className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{draft.job_company}</span>
                       </div>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{new Date(draft.created_at).toLocaleString("fr-BE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}</span>
+                        {draft.job_source && (
+                          <>
+                            <span className="text-muted-foreground/50">|</span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">{draft.job_source}</Badge>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <Badge variant="outline" className="shrink-0 text-xs text-green-500 border-green-500/30">
                       Generated
@@ -920,6 +930,12 @@ export default function EmailsPage() {
                           <span className="truncate">{draft.business_category}</span>
                         </div>
                       )}
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{new Date(draft.created_at).toLocaleString("fr-BE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}</span>
+                        <span className="text-muted-foreground/50">|</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Google Maps</Badge>
+                      </div>
                     </div>
                     <Badge variant="outline" className="shrink-0 text-xs text-green-500 border-green-500/30">
                       Generated

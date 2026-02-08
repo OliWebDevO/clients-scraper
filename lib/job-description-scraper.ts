@@ -4,9 +4,9 @@ import { randomDelay } from "@/lib/scrapers/base";
 const PLATFORM_SELECTORS: Record<string, string[]> = {
   linkedin: [".description__text", ".show-more-less-html__markup", ".jobs-description__content"],
   indeed: ["#jobDescriptionText", ".jobsearch-jobDescriptionText", '[data-testid="jobDescriptionText"]'],
-  ictjob: [".job-description", ".job-info", ".vacancy-description"],
+  ictjob: [".job-description", ".job-info", ".vacancy-description", ".job-content", ".offer-content", "#TextJobDescription", ".job-detail"],
   jobat: [".job-description", ".vacancy-description", ".job-detail__description"],
-  actiris: [".field--name-field-description", ".job-description", ".offer-description"],
+  actiris: [".bloc-emploi__list-info", ".container-infos", ".col-lg-7", ".field--name-field-description", ".job-description", ".offer-description"],
   jobsora: [".job-description", ".vacancy-description", ".description"],
 };
 
@@ -65,7 +65,7 @@ function detectPlatform(url: string): string | null {
   return null;
 }
 
-async function scrapeWithPuppeteer(url: string): Promise<string> {
+async function scrapeWithPuppeteer(url: string, options?: { waitSelectors?: string; waitUntil?: "networkidle2" | "domcontentloaded" }): Promise<string> {
   const puppeteer = await import("puppeteer");
   const browser = await puppeteer.default.launch({
     headless: true,
@@ -77,8 +77,10 @@ async function scrapeWithPuppeteer(url: string): Promise<string> {
     await page.setUserAgent(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    await page.waitForSelector("#jobDescriptionText, .jobsearch-jobDescriptionText", { timeout: 10000 }).catch(() => {});
+    await page.goto(url, { waitUntil: options?.waitUntil ?? "networkidle2", timeout: 30000 });
+    if (options?.waitSelectors) {
+      await page.waitForSelector(options.waitSelectors, { timeout: 10000 }).catch(() => {});
+    }
     const html = await page.content();
     return html;
   } finally {
@@ -126,24 +128,62 @@ async function scrapeWithFetch(url: string): Promise<string> {
   throw new Error(`Too many redirects (max ${MAX_REDIRECTS}) fetching ${url}`);
 }
 
-async function scrapeActirisApi(url: string): Promise<string> {
-  // Actiris uses JSON API - extract offer ID from URL
-  const match = url.match(/\/(\d+)/);
-  if (match) {
-    try {
-      const apiUrl = `https://www.actiris.brussels/api/offers/${match[1]}`;
-      const response = await fetch(apiUrl, {
-        headers: { Accept: "application/json" },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.description) return data.description;
-      }
-    } catch {
-      // fallback to HTML scraping
-    }
+async function scrapeIctjobAjax(url: string): Promise<string> {
+  // Extract numeric job ID from URL pattern: /en/job/slug/1-340780 → 340780
+  const match = url.match(/(\d+)(?:\s*$)/);
+  if (!match) {
+    throw new Error("Could not extract ICTjob offer ID from URL");
   }
-  const html = await scrapeWithFetch(url);
+  const jobId = match[1];
+
+  // Step 1: Fetch search page to get session cookies (bot protection)
+  const searchResponse = await fetch("https://www.ictjob.be/en/search-it-jobs?q=developer", {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "text/html",
+    },
+  });
+
+  // Collect cookies from the response
+  const cookies = searchResponse.headers.getSetCookie?.()?.join("; ") || "";
+
+  // Step 2: Call AJAX endpoint with cookies and proper headers
+  const ajaxResponse = await fetch(
+    `https://www.ictjob.be/en/ajax/JobOfferContent?id=${jobId}`,
+    {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        Accept: "text/html, */*; q=0.01",
+        Referer: "https://www.ictjob.be/en/search-it-jobs",
+        Cookie: cookies,
+      },
+    }
+  );
+
+  if (!ajaxResponse.ok) {
+    throw new Error(`ICTjob AJAX returned ${ajaxResponse.status}`);
+  }
+
+  const html = await ajaxResponse.text();
+  return extractFromHtml(html, "ictjob");
+}
+
+async function scrapeActirisPage(url: string): Promise<string> {
+  // Actiris detail pages are server-rendered HTML
+  // URL format: /detail-offre-d-emploi/?reference=123&type=Hrxml
+  // Old format fallback: /offres-d-emploi/123
+  let fetchUrl = url;
+
+  // Convert old URL format to new format
+  const oldFormatMatch = url.match(/offres-d-emploi\/(\d+)\s*$/);
+  if (oldFormatMatch) {
+    fetchUrl = `https://www.actiris.brussels/fr/citoyens/offres-d-emploi/detail-offre-d-emploi/?reference=${oldFormatMatch[1]}&type=Hrxml`;
+  }
+
+  const html = await scrapeWithFetch(fetchUrl);
   return extractFromHtml(html, "actiris");
 }
 
@@ -195,7 +235,9 @@ export async function scrapeJobDescription(url: string): Promise<string> {
   // Special handling for platforms that need JS rendering
   if (platform === "indeed") {
     try {
-      const html = await scrapeWithPuppeteer(url);
+      const html = await scrapeWithPuppeteer(url, {
+        waitSelectors: "#jobDescriptionText, .jobsearch-jobDescriptionText",
+      });
       const description = extractFromHtml(html, platform);
       if (description.length > 50) return description;
     } catch (e) {
@@ -203,9 +245,14 @@ export async function scrapeJobDescription(url: string): Promise<string> {
     }
   }
 
-  // Actiris has a JSON API
+  // ICTjob blocks detail pages - use their internal AJAX API with session cookies
+  if (platform === "ictjob") {
+    return scrapeIctjobAjax(url);
+  }
+
+  // Actiris detail pages are server-rendered
   if (platform === "actiris") {
-    return scrapeActirisApi(url);
+    return scrapeActirisPage(url);
   }
 
   // Default: fetch + cheerio

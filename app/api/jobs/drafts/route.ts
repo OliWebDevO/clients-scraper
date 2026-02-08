@@ -22,12 +22,12 @@ export async function GET() {
     const jobIds = draftsData.map((d: JobDraft) => d.job_id);
     const { data: jobsData } = await supabase
       .from("jobs")
-      .select("id, title, company")
+      .select("id, title, company, source")
       .in("id", jobIds);
 
-    const jobMap = new Map<string, { title: string; company: string | null }>();
-    jobsData?.forEach((j: { id: string; title: string; company: string | null }) => {
-      jobMap.set(j.id, { title: j.title, company: j.company });
+    const jobMap = new Map<string, { title: string; company: string | null; source: string | null }>();
+    jobsData?.forEach((j: { id: string; title: string; company: string | null; source: string | null }) => {
+      jobMap.set(j.id, { title: j.title, company: j.company, source: j.source });
     });
 
     // Get the user's CV
@@ -101,6 +101,7 @@ export async function GET() {
         ...draft,
         job_title: job?.title || "Unknown",
         job_company: job?.company || "Unknown",
+        job_source: job?.source || null,
         view_url: urls.view_url || null,
         download_url: urls.download_url || null,
         cv_url: cvUrl,
