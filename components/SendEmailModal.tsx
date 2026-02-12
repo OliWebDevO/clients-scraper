@@ -25,12 +25,24 @@ import { Loader2, Mail, FileText, Eye, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate } from "@/lib/types";
 import { replaceTemplateVariables, extractCity } from "@/lib/utils";
+import {
+  HTML_TEMPLATE_MARKER,
+  buildHtmlEmail,
+  generateDefaults,
+  type HtmlEmailOverrides,
+} from "@/lib/email-html-template";
 
 interface SendEmailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   business: Business | null;
-  onSend: (data: { subject: string; body: string; recipientEmail: string }) => void;
+  onSend: (data: {
+    subject: string;
+    body: string;
+    recipientEmail: string;
+    useHtmlTemplate?: boolean;
+    htmlOverrides?: HtmlEmailOverrides;
+  }) => void;
   isLoading: boolean;
   draftBody?: string | null;
   draftSubject?: string | null;
@@ -53,6 +65,15 @@ export function SendEmailModal({
   const [activeTab, setActiveTab] = useState("template");
   const [showPreview, setShowPreview] = useState(false);
 
+  // HTML template editable fields
+  const [htmlHeroHeading, setHtmlHeroHeading] = useState("");
+  const [htmlHeroSubtitle, setHtmlHeroSubtitle] = useState("");
+  const [htmlPersonalMessage, setHtmlPersonalMessage] = useState("");
+  const [showHtmlPreview, setShowHtmlPreview] = useState(false);
+
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+  const isHtmlTemplate = selectedTemplate?.body === HTML_TEMPLATE_MARKER;
+
   useEffect(() => {
     async function fetchTemplates() {
       const { data } = await supabase
@@ -69,7 +90,7 @@ export function SendEmailModal({
     }
     if (open) {
       fetchTemplates();
-      // Auto-select draft tab if draft content is available
+      setShowHtmlPreview(false);
       if (draftBody) {
         setActiveTab("draft");
         setSubject(draftSubject || `Proposition — ${business?.name || ""}`);
@@ -79,6 +100,23 @@ export function SendEmailModal({
       }
     }
   }, [open]);
+
+  // Populate HTML template fields when business or template changes
+  useEffect(() => {
+    if (isHtmlTemplate && business) {
+      const defaults = generateDefaults({
+        businessName: business.name,
+        rating: business.rating,
+        reviewCount: business.review_count,
+        category: business.category,
+        address: business.address,
+        hasWebsite: business.has_website,
+      });
+      setHtmlHeroHeading(defaults.heroHeading);
+      setHtmlHeroSubtitle(defaults.heroSubtitle);
+      setHtmlPersonalMessage(defaults.personalMessage);
+    }
+  }, [isHtmlTemplate, business?.id]);
 
   useEffect(() => {
     if (activeTab === "template" && selectedTemplateId) {
@@ -111,18 +149,48 @@ export function SendEmailModal({
     return replaceTemplateVariables(content, getVariables());
   };
 
+  const currentOverrides: HtmlEmailOverrides = {
+    heroHeading: htmlHeroHeading,
+    heroSubtitle: htmlHeroSubtitle,
+    personalMessage: htmlPersonalMessage,
+  };
+
+  const htmlPreview =
+    isHtmlTemplate && business
+      ? buildHtmlEmail(
+          {
+            businessName: business.name,
+            rating: business.rating,
+            reviewCount: business.review_count,
+            category: business.category,
+            address: business.address,
+            hasWebsite: business.has_website,
+          },
+          currentOverrides
+        ).replace(
+          "</style>",
+          ".service-col { width: 33.33% !important; display: table-cell !important; }\n" +
+          ".stat-col { width: 33.33% !important; display: table-cell !important; }\n" +
+          ".row-content { width: 100% !important; }\n" +
+          "</style>"
+        )
+      : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const sendingHtml = isHtmlTemplate && activeTab === "template";
     onSend({
-      subject: getProcessedContent(subject),
-      body: getProcessedContent(body),
+      subject: sendingHtml ? getProcessedContent(subject) : getProcessedContent(subject),
+      body: sendingHtml ? HTML_TEMPLATE_MARKER : getProcessedContent(body),
       recipientEmail,
+      useHtmlTemplate: sendingHtml,
+      htmlOverrides: sendingHtml ? currentOverrides : undefined,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
@@ -200,6 +268,18 @@ export function SendEmailModal({
                   </SelectContent>
                 </Select>
               </div>
+
+              {isHtmlTemplate && (
+                <div className="space-y-2">
+                  <Label htmlFor="htmlSubject">Sujet</Label>
+                  <Input
+                    id="htmlSubject"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="custom" className="space-y-4">
@@ -216,44 +296,111 @@ export function SendEmailModal({
             </TabsContent>
           </Tabs>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="body">Message</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-1 text-xs"
-                onClick={() => setShowPreview(!showPreview)}
-              >
-                <Eye className="h-3 w-3" />
-                {showPreview ? "Edit" : "Preview"}
-              </Button>
-            </div>
-            {showPreview ? (
-              <div className="min-h-[200px] rounded-md border border-border bg-muted/30 p-4">
-                <p className="mb-2 font-medium">
-                  Subject: {getProcessedContent(subject)}
-                </p>
-                <div className="whitespace-pre-wrap text-sm">
-                  {getProcessedContent(body)}
+          {/* HTML Template: editable fields + preview */}
+          {isHtmlTemplate && activeTab === "template" ? (
+            <div className="space-y-4">
+              {/* Editable fields */}
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="htmlHeroHeading">Titre principal</Label>
+                  <Input
+                    id="htmlHeroHeading"
+                    value={htmlHeroHeading}
+                    onChange={(e) => setHtmlHeroHeading(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="htmlHeroSubtitle">Sous-titre (intro)</Label>
+                  <Textarea
+                    id="htmlHeroSubtitle"
+                    value={htmlHeroSubtitle}
+                    onChange={(e) => setHtmlHeroSubtitle(e.target.value)}
+                    className="min-h-[60px]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Utilisez **texte** pour mettre en gras
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="htmlPersonalMessage">Message personnel</Label>
+                  <Textarea
+                    id="htmlPersonalMessage"
+                    value={htmlPersonalMessage}
+                    onChange={(e) => setHtmlPersonalMessage(e.target.value)}
+                    className="min-h-[160px]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    S&eacute;parez les paragraphes par une ligne vide. Utilisez **texte** pour mettre en gras.
+                  </p>
                 </div>
               </div>
-            ) : (
-              <Textarea
-                id="body"
-                placeholder="Write your message... Use {{business_name}}, {{city}}, etc. for variables"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                className="min-h-[200px]"
-                required
-              />
-            )}
-            <p className="text-xs text-muted-foreground">
-              Available variables: {"{{business_name}}"}, {"{{city}}"},{" "}
-              {"{{address}}"}, {"{{phone}}"}, {"{{category}}"}, {"{{rating}}"}
-            </p>
-          </div>
+
+              {/* Preview toggle */}
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => setShowHtmlPreview(!showHtmlPreview)}
+                >
+                  <Eye className="h-4 w-4" />
+                  {showHtmlPreview ? "Masquer l'aper\u00E7u" : "Voir l'aper\u00E7u"}
+                </Button>
+                {showHtmlPreview && htmlPreview && (
+                  <iframe
+                    srcDoc={htmlPreview}
+                    className="w-full rounded-md border border-border"
+                    style={{ height: "500px" }}
+                    sandbox=""
+                    title="Email preview"
+                  />
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Standard text editor for other templates / draft / custom */
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="body">Message</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  onClick={() => setShowPreview(!showPreview)}
+                >
+                  <Eye className="h-3 w-3" />
+                  {showPreview ? "Edit" : "Preview"}
+                </Button>
+              </div>
+              {showPreview ? (
+                <div className="min-h-[200px] rounded-md border border-border bg-muted/30 p-4">
+                  <p className="mb-2 font-medium">
+                    Subject: {getProcessedContent(subject)}
+                  </p>
+                  <div className="whitespace-pre-wrap text-sm">
+                    {getProcessedContent(body)}
+                  </div>
+                </div>
+              ) : (
+                <Textarea
+                  id="body"
+                  placeholder="Write your message... Use {{business_name}}, {{city}}, etc. for variables"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  className="min-h-[200px]"
+                  required
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Available variables: {"{{business_name}}"}, {"{{city}}"},{" "}
+                {"{{address}}"}, {"{{phone}}"}, {"{{category}}"}, {"{{rating}}"}
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button
@@ -265,7 +412,7 @@ export function SendEmailModal({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !recipientEmail || !subject || !body}
+              disabled={isLoading || !recipientEmail || !subject || (!isHtmlTemplate && !body)}
             >
               {isLoading ? (
                 <>

@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate, SentEmail, UserDocument } from "@/lib/types";
 import { EMAIL_VARIABLES } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
+import { HTML_TEMPLATE_MARKER, type HtmlEmailOverrides } from "@/lib/email-html-template";
 import {
   Mail,
   Plus,
@@ -38,6 +39,8 @@ import {
   Download,
   Building2,
   Briefcase,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export default function EmailsPage() {
@@ -59,6 +62,8 @@ export default function EmailsPage() {
   const [emailBusiness, setEmailBusiness] = useState<Business | null>(null);
   const [emailDraftBody, setEmailDraftBody] = useState<string | null>(null);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [showAllDrafts, setShowAllDrafts] = useState(false);
+  const [showAllBusinessDrafts, setShowAllBusinessDrafts] = useState(false);
 
   const cvInputRef = useRef<HTMLInputElement>(null);
   const coverLetterInputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +107,38 @@ export default function EmailsPage() {
     try {
       const res = await fetch("/api/emails/templates");
       const result = await res.json();
-      setTemplates(result.data || []);
+      const existing: EmailTemplate[] = result.data || [];
+
+      // Auto-create "Premier Contact" HTML template if not present
+      const hasHtmlTemplate = existing.some((t) => t.body === HTML_TEMPLATE_MARKER);
+      if (!hasHtmlTemplate) {
+        // Unset any existing default
+        const currentDefault = existing.find((t) => t.is_default);
+        if (currentDefault) {
+          await fetch("/api/emails/templates", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: currentDefault.id, is_default: false }),
+          });
+        }
+        await fetch("/api/emails/templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "Premier Contact (Design)",
+            subject: "Un site web professionnel pour {{business_name}}",
+            body: HTML_TEMPLATE_MARKER,
+            is_default: true,
+          }),
+        });
+        // Re-fetch after creation
+        const res2 = await fetch("/api/emails/templates");
+        const result2 = await res2.json();
+        setTemplates(result2.data || []);
+        return;
+      }
+
+      setTemplates(existing);
     } catch {
       // Failed to fetch templates
     }
@@ -310,6 +346,8 @@ export default function EmailsPage() {
     subject: string;
     body: string;
     recipientEmail: string;
+    useHtmlTemplate?: boolean;
+    htmlOverrides?: HtmlEmailOverrides;
   }) => {
     setIsSendingEmail(true);
     try {
@@ -317,8 +355,12 @@ export default function EmailsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...data,
+          subject: data.subject,
+          body: data.body,
+          recipientEmail: data.recipientEmail,
           businessId: emailBusiness?.id,
+          useHtmlTemplate: data.useHtmlTemplate,
+          htmlOverrides: data.htmlOverrides,
         }),
       });
 
@@ -692,6 +734,204 @@ export default function EmailsPage() {
         </CardContent>
       </Card>
 
+      {/* Drafted Clients */}
+      {businessDrafts.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Drafted Clients
+              <Badge variant="secondary" className="ml-2">{businessDrafts.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+            <div className="space-y-4">
+              {(showAllBusinessDrafts ? businessDrafts : businessDrafts.slice(0, 1)).map((draft) => (
+                <div
+                  key={draft.id}
+                  className="rounded-lg border border-border p-3 sm:p-4 space-y-3"
+                >
+                  {/* Business info */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-medium text-sm sm:text-base truncate">{draft.business_name}</h3>
+                      {draft.business_category && (
+                        <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground">
+                          <Building2 className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{draft.business_category}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{new Date(draft.created_at).toLocaleString("fr-BE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}</span>
+                        <span className="text-muted-foreground/50">|</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Google Maps</Badge>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-xs text-green-500 border-green-500/30">
+                      Generated
+                    </Badge>
+                  </div>
+
+                  {/* Proposal document */}
+                  <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                    <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
+                      <FileText className="h-7 w-7 text-green-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-muted-foreground">Proposition</p>
+                        <p className="text-sm font-medium truncate">{draft.filename}</p>
+                        {draft.file_size && (
+                          <p className="text-xs text-muted-foreground">
+                            {(draft.file_size / 1024).toFixed(1)} KB
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
+                      {draft.download_url && (
+                        <a href={draft.download_url}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Download Proposal">
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Final Version */}
+                  <div className="rounded-md border border-dashed border-border p-2 sm:p-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
+                    {draft.final_storage_path ? (
+                      <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center">
+                        <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
+                          <FileText className="h-7 w-7 text-green-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{draft.final_filename}</p>
+                            {draft.final_file_size && (
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(draft.final_file_size)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
+                          {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
+                            <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Voir">
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </a>
+                          )}
+                          {draft.final_download_url && (
+                            <a href={draft.final_download_url}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Telecharger">
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            </a>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Remplacer"
+                            onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
+                            disabled={uploadingFinalBusinessDraftId === draft.id}
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Supprimer"
+                            onClick={() => handleDeleteBusinessFinal(draft.id)}
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <input
+                          ref={(el) => { businessFinalUploadRefs.current[draft.id] = el; }}
+                          type="file"
+                          accept=".pdf,.docx,.odt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadBusinessFinal(file, draft.id);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full cursor-pointer"
+                          onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
+                          disabled={uploadingFinalBusinessDraftId === draft.id}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          {uploadingFinalBusinessDraftId === draft.id ? "Upload en cours..." : "Upload la version finale (.docx, .pdf, .odt)"}
+                        </Button>
+                        <input
+                          ref={(el) => { businessFinalUploadRefs.current[draft.id] = el; }}
+                          type="file"
+                          accept=".pdf,.docx,.odt"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadBusinessFinal(file, draft.id);
+                            e.target.value = "";
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Send email button */}
+                  {draft.business && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full min-w-0"
+                      onClick={() => handleSendEmailToBusiness(draft.business, draft.id)}
+                    >
+                      <Send className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">Envoyer un mail a {draft.business_name}</span>
+                    </Button>
+                  )}
+
+                  {/* Re-generate hint */}
+                  <p className="text-xs text-muted-foreground">
+                    Pour re-generer, cliquez sur le bouton Draft du client dans l&apos;onglet <a href="/clients" className="underline hover:text-foreground transition-colors">Clients</a>.
+                  </p>
+                </div>
+              ))}
+              {businessDrafts.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowAllBusinessDrafts(!showAllBusinessDrafts)}
+                >
+                  {showAllBusinessDrafts ? (
+                    <>
+                      <ChevronUp className="mr-2 h-4 w-4" />
+                      Voir moins
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="mr-2 h-4 w-4" />
+                      Voir plus ({businessDrafts.length - 1} autres)
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Drafted Jobs */}
       {drafts.length > 0 && (
         <Card className="overflow-hidden">
@@ -704,7 +944,7 @@ export default function EmailsPage() {
           </CardHeader>
           <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="space-y-4">
-              {drafts.map((draft) => (
+              {(showAllDrafts ? drafts : drafts.slice(0, 1)).map((draft) => (
                 <div
                   key={draft.id}
                   className="rounded-lg border border-border p-3 sm:p-4 space-y-3"
@@ -896,184 +1136,26 @@ export default function EmailsPage() {
                   </p>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Drafted Clients */}
-      {businessDrafts.length > 0 && (
-        <Card className="overflow-hidden">
-          <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              Drafted Clients
-              <Badge variant="secondary" className="ml-2">{businessDrafts.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
-            <div className="space-y-4">
-              {businessDrafts.map((draft) => (
-                <div
-                  key={draft.id}
-                  className="rounded-lg border border-border p-3 sm:p-4 space-y-3"
+              {drafts.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowAllDrafts(!showAllDrafts)}
                 >
-                  {/* Business info */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-medium text-sm sm:text-base truncate">{draft.business_name}</h3>
-                      {draft.business_category && (
-                        <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground">
-                          <Building2 className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{draft.business_category}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3 shrink-0" />
-                        <span>{new Date(draft.created_at).toLocaleString("fr-BE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" })}</span>
-                        <span className="text-muted-foreground/50">|</span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Google Maps</Badge>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="shrink-0 text-xs text-green-500 border-green-500/30">
-                      Generated
-                    </Badge>
-                  </div>
-
-                  {/* Proposal document */}
-                  <div className="rounded-md bg-muted/50 p-2 sm:p-3 space-y-2 sm:space-y-0 sm:flex sm:items-center">
-                    <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
-                      <FileText className="h-7 w-7 text-green-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-muted-foreground">Proposition</p>
-                        <p className="text-sm font-medium truncate">{draft.filename}</p>
-                        {draft.file_size && (
-                          <p className="text-xs text-muted-foreground">
-                            {(draft.file_size / 1024).toFixed(1)} KB
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
-                      {draft.download_url && (
-                        <a href={draft.download_url}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Download Proposal">
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Final Version */}
-                  <div className="rounded-md border border-dashed border-border p-2 sm:p-3 space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Version finale</p>
-                    {draft.final_storage_path ? (
-                      <div className="space-y-2 sm:space-y-0 sm:flex sm:items-center">
-                        <div className="flex items-center gap-2 sm:gap-3 sm:flex-1 sm:min-w-0">
-                          <FileText className="h-7 w-7 text-green-500 shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{draft.final_filename}</p>
-                            {draft.final_file_size && (
-                              <p className="text-xs text-muted-foreground">
-                                {formatFileSize(draft.final_file_size)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1 border-t border-border/50 pt-1.5 sm:border-t-0 sm:pt-0 sm:ml-2 shrink-0">
-                          {draft.final_view_url && draft.final_filename && isPdf(draft.final_filename) && (
-                            <a href={draft.final_view_url} target="_blank" rel="noopener noreferrer">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Voir">
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
-                            </a>
-                          )}
-                          {draft.final_download_url && (
-                            <a href={draft.final_download_url}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Telecharger">
-                                <Download className="h-3.5 w-3.5" />
-                              </Button>
-                            </a>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title="Remplacer"
-                            onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
-                            disabled={uploadingFinalBusinessDraftId === draft.id}
-                          >
-                            <Upload className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Supprimer"
-                            onClick={() => handleDeleteBusinessFinal(draft.id)}
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                        <input
-                          ref={(el) => { businessFinalUploadRefs.current[draft.id] = el; }}
-                          type="file"
-                          accept=".pdf,.docx,.odt"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUploadBusinessFinal(file, draft.id);
-                            e.target.value = "";
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full cursor-pointer"
-                          onClick={() => businessFinalUploadRefs.current[draft.id]?.click()}
-                          disabled={uploadingFinalBusinessDraftId === draft.id}
-                        >
-                          <Upload className="mr-2 h-4 w-4" />
-                          {uploadingFinalBusinessDraftId === draft.id ? "Upload en cours..." : "Upload la version finale (.docx, .pdf, .odt)"}
-                        </Button>
-                        <input
-                          ref={(el) => { businessFinalUploadRefs.current[draft.id] = el; }}
-                          type="file"
-                          accept=".pdf,.docx,.odt"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUploadBusinessFinal(file, draft.id);
-                            e.target.value = "";
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Send email button */}
-                  {draft.business && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full min-w-0"
-                      onClick={() => handleSendEmailToBusiness(draft.business, draft.id)}
-                    >
-                      <Send className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">Envoyer un mail a {draft.business_name}</span>
-                    </Button>
+                  {showAllDrafts ? (
+                    <>
+                      <ChevronUp className="mr-2 h-4 w-4" />
+                      Voir moins
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="mr-2 h-4 w-4" />
+                      Voir plus ({drafts.length - 1} autres)
+                    </>
                   )}
-
-                  {/* Re-generate hint */}
-                  <p className="text-xs text-muted-foreground">
-                    Pour re-generer, cliquez sur le bouton Draft du client dans l&apos;onglet <a href="/clients" className="underline hover:text-foreground transition-colors">Clients</a>.
-                  </p>
-                </div>
-              ))}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
