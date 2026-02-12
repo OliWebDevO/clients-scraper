@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 import type { ScrapeSchedule } from "@/lib/types";
 import { JOB_PLATFORMS, DEFAULT_KEYWORDS } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
@@ -51,15 +50,13 @@ export default function SettingsPage() {
 
   const fetchSchedules = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("scrape_schedules")
-      .select("id, name, type, enabled, frequency, time_of_day, day_of_week, config, last_run_at, next_run_at, created_at")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const res = await fetch("/api/schedules");
+      const result = await res.json();
+      if (!result.success) throw new Error();
+      setSchedules(result.data || []);
+    } catch {
       toast({ title: "Error", description: "Failed to fetch schedules", variant: "destructive" });
-    } else {
-      setSchedules(data || []);
     }
     setLoading(false);
   };
@@ -87,26 +84,29 @@ export default function SettingsPage() {
   };
 
   const handleToggle = async (id: string, enabled: boolean) => {
-    const { error } = await supabase
-      .from("scrape_schedules")
-      .update({ enabled })
-      .eq("id", id);
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to update schedule", variant: "destructive" });
-    } else {
+    try {
+      const res = await fetch("/api/schedules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error();
       fetchSchedules();
+    } catch {
+      toast({ title: "Error", description: "Failed to update schedule", variant: "destructive" });
     }
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("scrape_schedules").delete().eq("id", id);
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to delete schedule", variant: "destructive" });
-    } else {
+    try {
+      const res = await fetch(`/api/schedules?id=${id}`, { method: "DELETE" });
+      const result = await res.json();
+      if (!result.success) throw new Error();
       toast({ title: "Deleted", description: "Schedule deleted" });
       fetchSchedules();
+    } catch {
+      toast({ title: "Error", description: "Failed to delete schedule", variant: "destructive" });
     }
   };
 
@@ -151,23 +151,23 @@ export default function SettingsPage() {
       next_run_at: nextRun,
     };
 
-    if (isEdit) {
-      const { error } = await supabase
-        .from("scrape_schedules")
-        .update(scheduleData)
-        .eq("id", currentSchedule.id);
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to update schedule", variant: "destructive" });
-        return;
-      }
-    } else {
-      const { error } = await supabase.from("scrape_schedules").insert(scheduleData);
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to create schedule", variant: "destructive" });
-        return;
-      }
+    try {
+      const res = isEdit
+        ? await fetch("/api/schedules", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: currentSchedule.id, ...scheduleData }),
+          })
+        : await fetch("/api/schedules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(scheduleData),
+          });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+    } catch {
+      toast({ title: "Error", description: isEdit ? "Failed to update schedule" : "Failed to create schedule", variant: "destructive" });
+      return;
     }
 
     toast({ title: "Saved", description: "Schedule saved successfully" });

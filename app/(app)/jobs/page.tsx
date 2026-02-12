@@ -261,12 +261,15 @@ export default function JobsPage() {
     const newValue = !job.investigated;
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, investigated: newValue } : j));
 
-    const { error } = await supabase
-      .from("jobs")
-      .update({ investigated: newValue })
-      .eq("id", job.id);
-
-    if (error) {
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: job.id, investigated: newValue }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error();
+    } catch {
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, investigated: !newValue } : j));
       toast({ title: "Erreur", description: "Impossible de mettre à jour le statut", variant: "destructive" });
     }
@@ -276,12 +279,15 @@ export default function JobsPage() {
     const oldValue = job.viable;
     setJobs(prev => prev.map(j => j.id === job.id ? { ...j, viable: value } : j));
 
-    const { error } = await supabase
-      .from("jobs")
-      .update({ viable: value })
-      .eq("id", job.id);
-
-    if (error) {
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: job.id, viable: value }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error();
+    } catch {
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, viable: oldValue } : j));
       toast({ title: "Erreur", description: "Impossible de mettre à jour le statut", variant: "destructive" });
     }

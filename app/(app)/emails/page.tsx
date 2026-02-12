@@ -99,11 +99,13 @@ export default function EmailsPage() {
   };
 
   const fetchTemplates = async () => {
-    const { data } = await supabase
-      .from("email_templates")
-      .select("id, name, subject, body, is_default, created_at, updated_at")
-      .order("is_default", { ascending: false });
-    setTemplates(data || []);
+    try {
+      const res = await fetch("/api/emails/templates");
+      const result = await res.json();
+      setTemplates(result.data || []);
+    } catch {
+      // Failed to fetch templates
+    }
   };
 
   const fetchSentEmails = async () => {
@@ -366,13 +368,14 @@ export default function EmailsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("email_templates").delete().eq("id", id);
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to delete template", variant: "destructive" });
-    } else {
+    try {
+      const res = await fetch(`/api/emails/templates?id=${id}`, { method: "DELETE" });
+      const result = await res.json();
+      if (!result.success) throw new Error();
       toast({ title: "Deleted", description: "Template deleted successfully" });
       fetchTemplates();
+    } catch {
+      toast({ title: "Error", description: "Failed to delete template", variant: "destructive" });
     }
   };
 
@@ -384,39 +387,34 @@ export default function EmailsPage() {
 
     const isEdit = "id" in currentTemplate && currentTemplate.id;
 
-    if (isEdit) {
-      const { error } = await supabase
-        .from("email_templates")
-        .update({
-          name: currentTemplate.name,
-          subject: currentTemplate.subject,
-          body: currentTemplate.body,
-          is_default: currentTemplate.is_default,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", currentTemplate.id);
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to update template", variant: "destructive" });
-        return;
-      }
-    } else {
-      // If setting as default, unset others first
-      if (currentTemplate.is_default) {
-        await supabase.from("email_templates").update({ is_default: false }).eq("is_default", true);
-      }
-
-      const { error } = await supabase.from("email_templates").insert({
-        name: currentTemplate.name,
-        subject: currentTemplate.subject,
-        body: currentTemplate.body,
-        is_default: currentTemplate.is_default,
-      });
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to create template", variant: "destructive" });
-        return;
-      }
+    try {
+      const res = isEdit
+        ? await fetch("/api/emails/templates", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: currentTemplate.id,
+              name: currentTemplate.name,
+              subject: currentTemplate.subject,
+              body: currentTemplate.body,
+              is_default: currentTemplate.is_default,
+            }),
+          })
+        : await fetch("/api/emails/templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: currentTemplate.name,
+              subject: currentTemplate.subject,
+              body: currentTemplate.body,
+              is_default: currentTemplate.is_default,
+            }),
+          });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+    } catch {
+      toast({ title: "Error", description: isEdit ? "Failed to update template" : "Failed to create template", variant: "destructive" });
+      return;
     }
 
     toast({ title: "Saved", description: "Template saved successfully" });

@@ -298,12 +298,15 @@ export default function ClientsPage() {
       prev.map(b => b.id === business.id ? { ...b, investigated: newValue } : b)
     );
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({ investigated: newValue })
-      .eq("id", business.id);
-
-    if (error) {
+    try {
+      const res = await fetch("/api/businesses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: business.id, investigated: newValue }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error();
+    } catch {
       // Revert on error
       setBusinesses(prev =>
         prev.map(b => b.id === business.id ? { ...b, investigated: !newValue } : b)
@@ -324,12 +327,15 @@ export default function ClientsPage() {
       prev.map(b => b.id === business.id ? { ...b, viable: value } : b)
     );
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({ viable: value })
-      .eq("id", business.id);
-
-    if (error) {
+    try {
+      const res = await fetch("/api/businesses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: business.id, viable: value }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error();
+    } catch {
       // Revert on error
       setBusinesses(prev =>
         prev.map(b => b.id === business.id ? { ...b, viable: oldValue } : b)

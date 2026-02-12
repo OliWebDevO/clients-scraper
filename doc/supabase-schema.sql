@@ -191,20 +191,20 @@ ALTER TABLE job_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE business_drafts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 
--- Permissive policies for the anon role (single-user app, protected by middleware auth)
--- These allow the anon key to continue working. Replace with stricter
--- policies (e.g. require a custom JWT claim) when ready.
+-- Read-only policies for the anon role (single-user app, protected by middleware auth).
+-- All writes go through server-side API routes using the service_role key
+-- which bypasses RLS automatically.
 
-CREATE POLICY "anon_all_businesses" ON businesses FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_jobs" ON jobs FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_scrape_logs" ON scrape_logs FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_scrape_schedules" ON scrape_schedules FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_settings" ON settings FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_email_templates" ON email_templates FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_sent_emails" ON sent_emails FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_user_documents" ON user_documents FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_job_drafts" ON job_drafts FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all_business_drafts" ON business_drafts FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_select_businesses" ON businesses FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_jobs" ON jobs FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_scrape_logs" ON scrape_logs FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_scrape_schedules" ON scrape_schedules FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_settings" ON settings FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_email_templates" ON email_templates FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_sent_emails" ON sent_emails FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_user_documents" ON user_documents FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_job_drafts" ON job_drafts FOR SELECT TO anon USING (true);
+CREATE POLICY "anon_select_business_drafts" ON business_drafts FOR SELECT TO anon USING (true);
 -- DENY all access for anon to app_users (contains password hashes)
 -- Use service_role key server-side to access this table
 DROP POLICY IF EXISTS "anon_all_app_users" ON app_users;
