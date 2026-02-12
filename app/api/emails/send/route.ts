@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { sendEmail } from "@/lib/resend";
 import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
-import { buildHtmlEmail, HTML_TEMPLATE_MARKER, type HtmlEmailOverrides } from "@/lib/email-html-template";
+import {
+  buildHtmlEmail,
+  HTML_TEMPLATE_MARKER,
+  buildFollowUpHtmlEmail,
+  getFollowUpVariant,
+  FOLLOWUP_SITE_MARKER,
+  FOLLOWUP_APP_MARKER,
+  FOLLOWUP_BOTH_MARKER,
+  type HtmlEmailOverrides,
+  type FollowUpVariant,
+  type FollowUpOverrides,
+} from "@/lib/email-html-template";
 
 interface SendEmailRequest {
   recipientEmail: string;
@@ -12,6 +23,9 @@ interface SendEmailRequest {
   templateId?: string;
   useHtmlTemplate?: boolean;
   htmlOverrides?: HtmlEmailOverrides;
+  useFollowUpTemplate?: boolean;
+  followUpVariant?: FollowUpVariant;
+  followUpOverrides?: FollowUpOverrides;
 }
 
 export async function POST(request: NextRequest) {
@@ -22,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: SendEmailRequest = await request.json();
-    const { recipientEmail, subject, body: emailBody, businessId, templateId, useHtmlTemplate, htmlOverrides } = body;
+    const { recipientEmail, subject, body: emailBody, businessId, templateId, useHtmlTemplate, htmlOverrides, useFollowUpTemplate, followUpVariant, followUpOverrides } = body;
 
     if (!recipientEmail || !subject) {
       return NextResponse.json(
@@ -55,7 +69,42 @@ export async function POST(request: NextRequest) {
     let html: string;
     let logBody: string;
 
-    if (useHtmlTemplate && businessId) {
+    const markerForVariant: Record<FollowUpVariant, string> = {
+      site: FOLLOWUP_SITE_MARKER,
+      app: FOLLOWUP_APP_MARKER,
+      both: FOLLOWUP_BOTH_MARKER,
+    };
+
+    if (useFollowUpTemplate && businessId && followUpVariant) {
+      // Build follow-up commercial proposal HTML email
+      const supabase = createServerSupabaseClient();
+      const { data: business } = await supabase
+        .from("businesses")
+        .select("name, rating, review_count, category, address, has_website")
+        .eq("id", businessId)
+        .single();
+
+      if (!business) {
+        return NextResponse.json(
+          { success: false, error: "Business not found" },
+          { status: 404 }
+        );
+      }
+
+      html = buildFollowUpHtmlEmail(
+        {
+          businessName: business.name,
+          rating: business.rating,
+          reviewCount: business.review_count,
+          category: business.category,
+          address: business.address,
+          hasWebsite: business.has_website,
+        },
+        followUpVariant,
+        followUpOverrides
+      );
+      logBody = markerForVariant[followUpVariant];
+    } else if (useHtmlTemplate && businessId) {
       // Build the designed HTML email from business data
       const supabase = createServerSupabaseClient();
       const { data: business } = await supabase

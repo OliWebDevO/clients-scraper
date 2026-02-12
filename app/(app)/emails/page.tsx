@@ -22,7 +22,15 @@ import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate, SentEmail, UserDocument } from "@/lib/types";
 import { EMAIL_VARIABLES } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
-import { HTML_TEMPLATE_MARKER, type HtmlEmailOverrides } from "@/lib/email-html-template";
+import {
+  HTML_TEMPLATE_MARKER,
+  FOLLOWUP_SITE_MARKER,
+  FOLLOWUP_APP_MARKER,
+  FOLLOWUP_BOTH_MARKER,
+  type HtmlEmailOverrides,
+  type FollowUpVariant,
+  type FollowUpOverrides,
+} from "@/lib/email-html-template";
 import {
   Mail,
   Plus,
@@ -110,6 +118,7 @@ export default function EmailsPage() {
       const existing: EmailTemplate[] = result.data || [];
 
       // Auto-create "Premier Contact" HTML template if not present
+      let needsRefetch = false;
       const hasHtmlTemplate = existing.some((t) => t.body === HTML_TEMPLATE_MARKER);
       if (!hasHtmlTemplate) {
         // Unset any existing default
@@ -125,13 +134,39 @@ export default function EmailsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: "Premier Contact (Design)",
+            name: "Premier Contact",
             subject: "Un site web professionnel pour {{business_name}}",
             body: HTML_TEMPLATE_MARKER,
             is_default: true,
           }),
         });
-        // Re-fetch after creation
+        needsRefetch = true;
+      }
+
+      // Auto-create follow-up templates if not present
+      const followUpTemplates: { marker: string; name: string }[] = [
+        { marker: FOLLOWUP_SITE_MARKER, name: "Follow Up Site Web" },
+        { marker: FOLLOWUP_APP_MARKER, name: "Follow Up App" },
+        { marker: FOLLOWUP_BOTH_MARKER, name: "Follow Up Site & App" },
+      ];
+
+      for (const tpl of followUpTemplates) {
+        if (!existing.some((t) => t.body === tpl.marker)) {
+          await fetch("/api/emails/templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: tpl.name,
+              subject: "Proposition — {{business_name}}",
+              body: tpl.marker,
+              is_default: false,
+            }),
+          });
+          needsRefetch = true;
+        }
+      }
+
+      if (needsRefetch) {
         const res2 = await fetch("/api/emails/templates");
         const result2 = await res2.json();
         setTemplates(result2.data || []);
@@ -348,6 +383,9 @@ export default function EmailsPage() {
     recipientEmail: string;
     useHtmlTemplate?: boolean;
     htmlOverrides?: HtmlEmailOverrides;
+    useFollowUpTemplate?: boolean;
+    followUpVariant?: FollowUpVariant;
+    followUpOverrides?: FollowUpOverrides;
   }) => {
     setIsSendingEmail(true);
     try {
@@ -361,6 +399,9 @@ export default function EmailsPage() {
           businessId: emailBusiness?.id,
           useHtmlTemplate: data.useHtmlTemplate,
           htmlOverrides: data.htmlOverrides,
+          useFollowUpTemplate: data.useFollowUpTemplate,
+          followUpVariant: data.followUpVariant,
+          followUpOverrides: data.followUpOverrides,
         }),
       });
 

@@ -1,15 +1,27 @@
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { downloadAndParseDocument } from "@/lib/document-parser";
-import { customizeProposal } from "@/lib/ai-customize";
 import { generateDocx } from "@/lib/docx-generator";
 import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
-import { reapplySpacing } from "@/lib/utils";
+import { extractCity, categoryToPhrase, cityToFrench } from "@/lib/utils";
 
 export const maxDuration = 120; // 2 minutes max
 
 interface DraftRequest {
   businessId: string;
+}
+
+/** Replace {{variables}} in plain text (no HTML escaping needed for docx) */
+function replaceProposalVariables(
+  text: string,
+  variables: Record<string, string>
+): string {
+  let result = text;
+  for (const [key, value] of Object.entries(variables)) {
+    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g");
+    result = result.replace(regex, value);
+  }
+  return result;
 }
 
 export async function POST(request: NextRequest) {
@@ -112,24 +124,31 @@ export async function POST(request: NextRequest) {
           phase: "reading_documents",
         });
 
-        // Phase 3: AI Generation
+        // Phase 3: Variable replacement
         sendEvent("progress", {
           progress: 60,
-          message: "Personnalisation par GPT-4o-mini...",
+          message: "Personnalisation de la proposition...",
           phase: "generating",
         });
 
-        const aiOutput = await customizeProposal({
-          businessName: business.name,
-          businessCategory: business.category,
-          businessAddress: business.address,
-          websiteUrl: business.website_url,
-          websiteScore: business.website_score,
-          websiteIssues: business.website_issues,
-          proposalText,
-        });
+        const city = cityToFrench(extractCity(business.address));
+        const { prefix, label } = categoryToPhrase(business.category);
+        const websiteIssues = Array.isArray(business.website_issues)
+          ? business.website_issues.join(", ")
+          : "";
 
-        const customizedText = reapplySpacing(proposalText, aiOutput);
+        const variables: Record<string, string> = {
+          business_name: business.name || "",
+          category: business.category || "",
+          category_phrase: `${prefix} ${label}`,
+          city,
+          address: business.address || "",
+          website_url: business.website_url || "Pas de site web",
+          website_score: business.website_score != null ? `${business.website_score}/100` : "N/A",
+          website_issues: websiteIssues || "Aucun probleme detecte",
+        };
+
+        const customizedText = replaceProposalVariables(proposalText, variables);
 
         sendEvent("progress", {
           progress: 75,
@@ -179,7 +198,7 @@ export async function POST(request: NextRequest) {
             storage_path: storagePath,
             filename,
             file_size: docxBuffer.length,
-            ai_model: "gpt-4o-mini",
+            ai_model: null,
             status: "completed",
             error_message: null,
             created_at: new Date().toISOString(),

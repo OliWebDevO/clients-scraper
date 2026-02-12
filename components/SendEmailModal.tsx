@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Mail, FileText, Eye, Sparkles } from "lucide-react";
+import { Loader2, Mail, FileText, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate } from "@/lib/types";
 import { replaceTemplateVariables, extractCity } from "@/lib/utils";
@@ -29,7 +29,13 @@ import {
   HTML_TEMPLATE_MARKER,
   buildHtmlEmail,
   generateDefaults,
+  isFollowUpMarker,
+  getFollowUpVariant,
+  generateFollowUpDefaults,
+  buildFollowUpHtmlEmail,
   type HtmlEmailOverrides,
+  type FollowUpVariant,
+  type FollowUpOverrides,
 } from "@/lib/email-html-template";
 
 interface SendEmailModalProps {
@@ -42,6 +48,9 @@ interface SendEmailModalProps {
     recipientEmail: string;
     useHtmlTemplate?: boolean;
     htmlOverrides?: HtmlEmailOverrides;
+    useFollowUpTemplate?: boolean;
+    followUpVariant?: FollowUpVariant;
+    followUpOverrides?: FollowUpOverrides;
   }) => void;
   isLoading: boolean;
   draftBody?: string | null;
@@ -71,8 +80,15 @@ export function SendEmailModal({
   const [htmlPersonalMessage, setHtmlPersonalMessage] = useState("");
   const [showHtmlPreview, setShowHtmlPreview] = useState(false);
 
+  // Follow-up template editable fields
+  const [followUpSubtitle, setFollowUpSubtitle] = useState("");
+  const [followUpBody, setFollowUpBody] = useState("");
+  const [showFollowUpPreview, setShowFollowUpPreview] = useState(false);
+
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
   const isHtmlTemplate = selectedTemplate?.body === HTML_TEMPLATE_MARKER;
+  const isFollowUpTemplate = selectedTemplate?.body ? isFollowUpMarker(selectedTemplate.body) : false;
+  const followUpVariant = selectedTemplate?.body ? getFollowUpVariant(selectedTemplate.body) : null;
 
   useEffect(() => {
     async function fetchTemplates() {
@@ -91,13 +107,8 @@ export function SendEmailModal({
     if (open) {
       fetchTemplates();
       setShowHtmlPreview(false);
-      if (draftBody) {
-        setActiveTab("draft");
-        setSubject(draftSubject || `Proposition — ${business?.name || ""}`);
-        setBody(draftBody);
-      } else {
-        setActiveTab("template");
-      }
+      setShowFollowUpPreview(false);
+      setActiveTab("template");
     }
   }, [open]);
 
@@ -118,6 +129,25 @@ export function SendEmailModal({
     }
   }, [isHtmlTemplate, business?.id]);
 
+  // Populate follow-up template fields when business or template changes
+  useEffect(() => {
+    if (isFollowUpTemplate && followUpVariant && business) {
+      const defaults = generateFollowUpDefaults(
+        {
+          businessName: business.name,
+          rating: business.rating,
+          reviewCount: business.review_count,
+          category: business.category,
+          address: business.address,
+          hasWebsite: business.has_website,
+        },
+        followUpVariant
+      );
+      setFollowUpSubtitle(defaults.heroSubtitle);
+      setFollowUpBody(draftBody || defaults.bodyContent);
+    }
+  }, [isFollowUpTemplate, followUpVariant, business?.id]);
+
   useEffect(() => {
     if (activeTab === "template" && selectedTemplateId) {
       const template = templates.find((t) => t.id === selectedTemplateId);
@@ -125,9 +155,6 @@ export function SendEmailModal({
         setSubject(template.subject);
         setBody(template.body);
       }
-    } else if (activeTab === "draft" && draftBody) {
-      setSubject(draftSubject || `Proposition — ${business?.name || ""}`);
-      setBody(draftBody);
     }
   }, [selectedTemplateId, templates, activeTab]);
 
@@ -176,16 +203,48 @@ export function SendEmailModal({
         )
       : null;
 
+  const followUpPreview =
+    isFollowUpTemplate && followUpVariant && business
+      ? buildFollowUpHtmlEmail(
+          {
+            businessName: business.name,
+            rating: business.rating,
+            reviewCount: business.review_count,
+            category: business.category,
+            address: business.address,
+            hasWebsite: business.has_website,
+          },
+          followUpVariant,
+          { heroSubtitle: followUpSubtitle, bodyContent: followUpBody }
+        ).replace(
+          "</style>",
+          ".row-content { width: 100% !important; }\n</style>"
+        )
+      : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const sendingHtml = isHtmlTemplate && activeTab === "template";
-    onSend({
-      subject: sendingHtml ? getProcessedContent(subject) : getProcessedContent(subject),
-      body: sendingHtml ? HTML_TEMPLATE_MARKER : getProcessedContent(body),
-      recipientEmail,
-      useHtmlTemplate: sendingHtml,
-      htmlOverrides: sendingHtml ? currentOverrides : undefined,
-    });
+    const sendingFollowUp = isFollowUpTemplate && followUpVariant && activeTab === "template";
+
+    if (sendingFollowUp) {
+      onSend({
+        subject: getProcessedContent(subject),
+        body: selectedTemplate?.body || "",
+        recipientEmail,
+        useFollowUpTemplate: true,
+        followUpVariant: followUpVariant,
+        followUpOverrides: { heroSubtitle: followUpSubtitle, bodyContent: followUpBody },
+      });
+    } else {
+      onSend({
+        subject: getProcessedContent(subject),
+        body: sendingHtml ? HTML_TEMPLATE_MARKER : getProcessedContent(body),
+        recipientEmail,
+        useHtmlTemplate: sendingHtml,
+        htmlOverrides: sendingHtml ? currentOverrides : undefined,
+      });
+    }
   };
 
   return (
@@ -217,13 +276,7 @@ export function SendEmailModal({
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className={`grid w-full ${draftBody ? "grid-cols-3" : "grid-cols-2"}`}>
-              {draftBody && (
-                <TabsTrigger value="draft" className="gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Brouillon
-                </TabsTrigger>
-              )}
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="template" className="gap-2">
                 <FileText className="h-4 w-4" />
                 Template
@@ -233,20 +286,6 @@ export function SendEmailModal({
                 Custom
               </TabsTrigger>
             </TabsList>
-
-            {draftBody && (
-              <TabsContent value="draft" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="draftSubject">Sujet</Label>
-                  <Input
-                    id="draftSubject"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    required
-                  />
-                </div>
-              </TabsContent>
-            )}
 
             <TabsContent value="template" className="space-y-4">
               <div className="space-y-2">
@@ -269,7 +308,7 @@ export function SendEmailModal({
                 </Select>
               </div>
 
-              {isHtmlTemplate && (
+              {(isHtmlTemplate || isFollowUpTemplate) && (
                 <div className="space-y-2">
                   <Label htmlFor="htmlSubject">Sujet</Label>
                   <Input
@@ -360,6 +399,55 @@ export function SendEmailModal({
                 )}
               </div>
             </div>
+          ) : isFollowUpTemplate && followUpVariant && activeTab === "template" ? (
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="followUpSubtitle">Sous-titre hero</Label>
+                  <Input
+                    id="followUpSubtitle"
+                    value={followUpSubtitle}
+                    onChange={(e) => setFollowUpSubtitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="followUpBody">Contenu de la proposition</Label>
+                  <Textarea
+                    id="followUpBody"
+                    value={followUpBody}
+                    onChange={(e) => setFollowUpBody(e.target.value)}
+                    className="min-h-[300px] text-sm font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Utilisez **texte** pour mettre en gras. **TITRE EN MAJUSCULES** seul sur une ligne = titre de section violet. **Autre Titre** seul sur une ligne = sous-titre blanc. Lignes commen&ccedil;ant par &quot;- &quot; = liste &agrave; puces.
+                  </p>
+                </div>
+              </div>
+
+              {/* Preview toggle */}
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => setShowFollowUpPreview(!showFollowUpPreview)}
+                >
+                  <Eye className="h-4 w-4" />
+                  {showFollowUpPreview ? "Masquer l'aper\u00E7u" : "Voir l'aper\u00E7u"}
+                </Button>
+                {showFollowUpPreview && followUpPreview && (
+                  <iframe
+                    srcDoc={followUpPreview}
+                    className="w-full rounded-md border border-border"
+                    style={{ height: "500px" }}
+                    sandbox=""
+                    title="Follow-up email preview"
+                  />
+                )}
+              </div>
+            </div>
           ) : (
             /* Standard text editor for other templates / draft / custom */
             <div className="space-y-2">
@@ -412,7 +500,7 @@ export function SendEmailModal({
             </Button>
             <Button
               type="submit"
-              disabled={isLoading || !recipientEmail || !subject || (!isHtmlTemplate && !body)}
+              disabled={isLoading || !recipientEmail || !subject || (!isHtmlTemplate && !isFollowUpTemplate && !body)}
             >
               {isLoading ? (
                 <>
