@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Mail, FileText, Eye } from "lucide-react";
+import { Loader2, Mail, FileText, Eye, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate } from "@/lib/types";
 import { replaceTemplateVariables, extractCity } from "@/lib/utils";
@@ -84,6 +84,8 @@ export function SendEmailModal({
   const [followUpSubtitle, setFollowUpSubtitle] = useState("");
   const [followUpBody, setFollowUpBody] = useState("");
   const [showFollowUpPreview, setShowFollowUpPreview] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
   const isHtmlTemplate = selectedTemplate?.body === HTML_TEMPLATE_MARKER;
@@ -257,9 +259,40 @@ export function SendEmailModal({
     }
   };
 
+  const handleDownloadPdf = async () => {
+    setIsSharing(true);
+    try {
+      const res = await fetch("/api/emails/share", { method: "POST" });
+      if (!res.ok) throw new Error("PDF generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "proposition-web.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Copy message to clipboard
+      const message =
+        "Bonjour,\n\n" +
+        "Je suis d\u00E9veloppeur web \u00E0 Bruxelles et je me permets de vous contacter car je pense que votre entreprise pourrait b\u00E9n\u00E9ficier d'une pr\u00E9sence en ligne moderne.\n\n" +
+        "Je vous ai pr\u00E9par\u00E9 une courte proposition en pi\u00E8ce jointe.\n\n" +
+        "N'h\u00E9sitez pas \u00E0 me contacter si cela vous int\u00E9resse, je serais ravi d'en discuter.\n\n" +
+        "Bien cordialement,\nOliver Van Droogenbroeck";
+      await navigator.clipboard.writeText(message);
+
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch (err) {
+      console.error("PDF error:", err);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
@@ -273,6 +306,31 @@ export function SendEmailModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* When HTML preview is active, show only preview */}
+          {showHtmlPreview && isHtmlTemplate ? (
+            <div className="space-y-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={() => setShowHtmlPreview(false)}
+              >
+                <Eye className="h-4 w-4" />
+                Masquer l&apos;aper&ccedil;u
+              </Button>
+              {htmlPreview && (
+                <iframe
+                  srcDoc={htmlPreview}
+                  className="w-full rounded-md border border-border"
+                  style={{ height: "70vh" }}
+                  sandbox=""
+                  title="Email preview"
+                />
+              )}
+            </div>
+          ) : (
+            <>
           <div className="space-y-2">
             <Label htmlFor="recipientEmail">Recipient Email</Label>
             <Input
@@ -298,36 +356,129 @@ export function SendEmailModal({
             </TabsList>
 
             <TabsContent value="template" className="space-y-4">
-              <div className="space-y-2">
-                <Label>Select Template</Label>
-                <Select
-                  value={selectedTemplateId}
-                  onValueChange={setSelectedTemplateId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a template..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                        {template.is_default && " (Default)"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Non-HTML templates: single column */}
+              {!isHtmlTemplate && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Select Template</Label>
+                    <Select
+                      value={selectedTemplateId}
+                      onValueChange={setSelectedTemplateId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                            {template.is_default && " (Default)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              {(isHtmlTemplate || isFollowUpTemplate) && (
-                <div className="space-y-2">
-                  <Label htmlFor="htmlSubject">Sujet</Label>
-                  <Input
-                    id="htmlSubject"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    required
-                  />
+                  {isFollowUpTemplate && (
+                    <div className="space-y-2">
+                      <Label htmlFor="htmlSubject">Sujet</Label>
+                      <Input
+                        id="htmlSubject"
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* HTML Template: two-column layout */}
+              {isHtmlTemplate && (
+                <>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left: select + sujet + titre + sous-titre */}
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Select Template</Label>
+                      <Select
+                        value={selectedTemplateId}
+                        onValueChange={setSelectedTemplateId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                              {template.is_default && " (Default)"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="htmlSubject">Sujet</Label>
+                      <Input
+                        id="htmlSubject"
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="htmlHeroHeading">Titre principal</Label>
+                      <Input
+                        id="htmlHeroHeading"
+                        value={htmlHeroHeading}
+                        onChange={(e) => setHtmlHeroHeading(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="htmlHeroSubtitle">Sous-titre (intro)</Label>
+                      <Textarea
+                        id="htmlHeroSubtitle"
+                        value={htmlHeroSubtitle}
+                        onChange={(e) => setHtmlHeroSubtitle(e.target.value)}
+                        className="min-h-[60px]"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Utilisez **texte** pour mettre en gras
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: message personnel */}
+                  <div className="space-y-2">
+                    <Label htmlFor="htmlPersonalMessage">Message personnel</Label>
+                    <Textarea
+                      id="htmlPersonalMessage"
+                      value={htmlPersonalMessage}
+                      onChange={(e) => setHtmlPersonalMessage(e.target.value)}
+                      className="min-h-[280px]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      S&eacute;parez les paragraphes par une ligne vide. Utilisez **texte** pour mettre en gras.
+                    </p>
+                  </div>
                 </div>
+
+                {/* Preview button */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => setShowHtmlPreview(true)}
+                >
+                  <Eye className="h-4 w-4" />
+                  Voir l&apos;aper&ccedil;u
+                </Button>
+                </>
               )}
             </TabsContent>
 
@@ -344,72 +495,11 @@ export function SendEmailModal({
               </div>
             </TabsContent>
           </Tabs>
+            </>
+          )}
 
-          {/* HTML Template: editable fields + preview */}
-          {isHtmlTemplate && activeTab === "template" ? (
-            <div className="space-y-4">
-              {/* Editable fields */}
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="htmlHeroHeading">Titre principal</Label>
-                  <Input
-                    id="htmlHeroHeading"
-                    value={htmlHeroHeading}
-                    onChange={(e) => setHtmlHeroHeading(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="htmlHeroSubtitle">Sous-titre (intro)</Label>
-                  <Textarea
-                    id="htmlHeroSubtitle"
-                    value={htmlHeroSubtitle}
-                    onChange={(e) => setHtmlHeroSubtitle(e.target.value)}
-                    className="min-h-[60px]"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Utilisez **texte** pour mettre en gras
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="htmlPersonalMessage">Message personnel</Label>
-                  <Textarea
-                    id="htmlPersonalMessage"
-                    value={htmlPersonalMessage}
-                    onChange={(e) => setHtmlPersonalMessage(e.target.value)}
-                    className="min-h-[160px]"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    S&eacute;parez les paragraphes par une ligne vide. Utilisez **texte** pour mettre en gras.
-                  </p>
-                </div>
-              </div>
-
-              {/* Preview toggle */}
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={() => setShowHtmlPreview(!showHtmlPreview)}
-                >
-                  <Eye className="h-4 w-4" />
-                  {showHtmlPreview ? "Masquer l'aper\u00E7u" : "Voir l'aper\u00E7u"}
-                </Button>
-                {showHtmlPreview && htmlPreview && (
-                  <iframe
-                    srcDoc={htmlPreview}
-                    className="w-full rounded-md border border-border"
-                    style={{ height: "500px" }}
-                    sandbox=""
-                    title="Email preview"
-                  />
-                )}
-              </div>
-            </div>
-          ) : isFollowUpTemplate && followUpVariant && activeTab === "template" ? (
+          {/* Follow-up template editor */}
+          {isFollowUpTemplate && followUpVariant && activeTab === "template" && (
             <div className="space-y-4">
               <div className="space-y-3">
                 <div className="space-y-2">
@@ -435,7 +525,6 @@ export function SendEmailModal({
                 </div>
               </div>
 
-              {/* Preview toggle */}
               <div className="space-y-2">
                 <Button
                   type="button"
@@ -458,8 +547,52 @@ export function SendEmailModal({
                 )}
               </div>
             </div>
-          ) : (
-            /* Standard text editor for other templates / draft / custom */
+          )}
+
+          {/* Standard text editor for other templates / draft / custom */}
+          {!isHtmlTemplate && !isFollowUpTemplate && activeTab === "template" && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="body">Message</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  onClick={() => setShowPreview(!showPreview)}
+                >
+                  <Eye className="h-3 w-3" />
+                  {showPreview ? "Edit" : "Preview"}
+                </Button>
+              </div>
+              {showPreview ? (
+                <div className="min-h-[200px] rounded-md border border-border bg-muted/30 p-4">
+                  <p className="mb-2 font-medium">
+                    Subject: {getProcessedContent(subject)}
+                  </p>
+                  <div className="whitespace-pre-wrap text-sm">
+                    {getProcessedContent(body)}
+                  </div>
+                </div>
+              ) : (
+                <Textarea
+                  id="body"
+                  placeholder="Write your message... Use {{business_name}}, {{city}}, etc. for variables"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  className="min-h-[200px]"
+                  required
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Available variables: {"{{business_name}}"}, {"{{city}}"},{" "}
+                {"{{address}}"}, {"{{phone}}"}, {"{{category}}"}, {"{{rating}}"}
+              </p>
+            </div>
+          )}
+
+          {/* Custom tab text editor */}
+          {activeTab === "custom" && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="body">Message</Label>
@@ -508,6 +641,24 @@ export function SendEmailModal({
             >
               Cancel
             </Button>
+            {isHtmlTemplate && activeTab === "template" && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleDownloadPdf}
+                disabled={isSharing}
+                className="gap-2"
+              >
+                {isSharing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : shareCopied ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
+                {isSharing ? "G\u00E9n\u00E9ration..." : shareCopied ? "PDF + message copi\u00E9 !" : "T\u00E9l\u00E9charger PDF"}
+              </Button>
+            )}
             <Button
               type="submit"
               disabled={isLoading || !recipientEmail || !subject || (!isHtmlTemplate && !isFollowUpTemplate && !body)}
