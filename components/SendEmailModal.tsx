@@ -98,9 +98,14 @@ export function SendEmailModal({
         .order("is_default", { ascending: false });
       if (data) {
         setTemplates(data);
-        const defaultTemplate = data.find((t) => t.is_default);
-        if (defaultTemplate) {
-          setSelectedTemplateId(defaultTemplate.id);
+        const htmlTemplate = data.find((t) => t.body === HTML_TEMPLATE_MARKER);
+        if (htmlTemplate) {
+          setSelectedTemplateId(htmlTemplate.id);
+        } else {
+          const defaultTemplate = data.find((t) => t.is_default);
+          if (defaultTemplate) {
+            setSelectedTemplateId(defaultTemplate.id);
+          }
         }
       }
     }

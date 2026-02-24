@@ -1,5 +1,7 @@
 import { categoryToPhrase, cityToFrench, extractCity } from "./utils";
 
+const EMAIL_ASSETS_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets`;
+
 export interface HtmlEmailData {
   businessName: string;
   rating: number | null;
@@ -209,7 +211,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" border="0" cellpadding="10" cellspacing="0" role="presentation">
                                                         <tr>
                                                             <td>
-                                                                <h3 style="margin: 0; color: #e7c5f8; font-family: 'Fira Sans', sans-serif; font-size: 22px; font-weight: 500; line-height: 1.3; text-align: center; letter-spacing: 0.3px;">Un site web</h3>
+                                                                <h3 style="margin: 0; color: #a78bfa; font-family: 'Fira Sans', sans-serif; font-size: 22px; font-weight: 500; line-height: 1.3; text-align: center; letter-spacing: 0.3px;">Une plateforme web interactive</h3>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -235,8 +237,8 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" height="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; height: 100%;">
                                                         <tr>
                                                             <td style="text-align: center; padding: 28px 16px; vertical-align: middle;">
-                                                                <div style="font-size: 32px; line-height: 32px; margin-bottom: 12px;">&#127760;</div>
-                                                                <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Site Moderne</h3>
+                                                                <div style="width: 40px; height: 40px; margin: 0 auto 12px;"><img src="${EMAIL_ASSETS_BASE}/icon-showcase.png" width="40" height="40" alt="Site" style="display: block; width: 40px; height: 40px;"></div>
+                                                                <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Design Moderne</h3>
                                                                 <p style="margin: 0; color: rgba(255,255,255,0.7); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; line-height: 1.5;">Design responsive et rapide, optimis&eacute; pour mobile</p>
                                                             </td>
                                                         </tr>
@@ -246,7 +248,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" height="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; height: 100%;">
                                                         <tr>
                                                             <td style="text-align: center; padding: 28px 16px; vertical-align: middle;">
-                                                                <div style="font-size: 32px; line-height: 32px; margin-bottom: 12px;">&#128200;</div>
+                                                                <div style="width: 40px; height: 40px; margin: 0 auto 12px;"><img src="${EMAIL_ASSETS_BASE}/icon-results.png" width="40" height="40" alt="SEO" style="display: block; width: 40px; height: 40px;"></div>
                                                                 <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Visibilit&eacute; SEO</h3>
                                                                 <p style="margin: 0; color: rgba(255,255,255,0.7); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; line-height: 1.5;">Attirez de nouveaux clients gr&acirc;ce &agrave; Google</p>
                                                             </td>
@@ -257,7 +259,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" height="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; height: 100%;">
                                                         <tr>
                                                             <td style="text-align: center; padding: 28px 16px; vertical-align: middle;">
-                                                                <div style="font-size: 32px; line-height: 32px; margin-bottom: 12px;">&#9889;</div>
+                                                                <div style="width: 40px; height: 40px; margin: 0 auto 12px;"><img src="${EMAIL_ASSETS_BASE}/icon-tailored.png" width="40" height="40" alt="Clé en main" style="display: block; width: 40px; height: 40px;"></div>
                                                                 <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Cl&eacute; en main</h3>
                                                                 <p style="margin: 0; color: rgba(255,255,255,0.7); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; line-height: 1.5;">Je m'occupe de tout, du design au d&eacute;ploiement</p>
                                                             </td>
@@ -285,7 +287,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" border="0" cellpadding="10" cellspacing="0" role="presentation">
                                                         <tr>
                                                             <td>
-                                                                <h3 style="margin: 0; color: #e7c5f8; font-family: 'Fira Sans', sans-serif; font-size: 22px; font-weight: 500; line-height: 1.3; text-align: center; letter-spacing: 0.3px;">Une application de gestion</h3>
+                                                                <h3 style="margin: 0; color: #60a5fa; font-family: 'Fira Sans', sans-serif; font-size: 22px; font-weight: 500; line-height: 1.3; text-align: center; letter-spacing: 0.3px;">Une application de gestion</h3>
                                                             </td>
                                                         </tr>
                                                     </table>
@@ -311,7 +313,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" height="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; height: 100%;">
                                                         <tr>
                                                             <td style="text-align: center; padding: 28px 16px; vertical-align: middle;">
-                                                                <div style="font-size: 32px; line-height: 32px; margin-bottom: 12px;">&#128181;</div>
+                                                                <div style="width: 40px; height: 40px; margin: 0 auto 12px;"><img src="${EMAIL_ASSETS_BASE}/icon-management.png" width="40" height="40" alt="Comptabilité" style="display: block; width: 40px; height: 40px;"></div>
                                                                 <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Comptabilit&eacute;</h3>
                                                                 <p style="margin: 0; color: rgba(255,255,255,0.7); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; line-height: 1.5;">Suivi des factures, d&eacute;penses et revenus en temps r&eacute;el</p>
                                                             </td>
@@ -322,7 +324,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" height="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; height: 100%;">
                                                         <tr>
                                                             <td style="text-align: center; padding: 28px 16px; vertical-align: middle;">
-                                                                <div style="font-size: 32px; line-height: 32px; margin-bottom: 12px;">&#128101;</div>
+                                                                <div style="width: 40px; height: 40px; margin: 0 auto 12px;"><img src="${EMAIL_ASSETS_BASE}/icon-partnership.png" width="40" height="40" alt="Personnel" style="display: block; width: 40px; height: 40px;"></div>
                                                                 <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Personnel</h3>
                                                                 <p style="margin: 0; color: rgba(255,255,255,0.7); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; line-height: 1.5;">Planning, pr&eacute;sences et gestion des &eacute;quipes simplifi&eacute;s</p>
                                                             </td>
@@ -333,7 +335,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" height="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; height: 100%;">
                                                         <tr>
                                                             <td style="text-align: center; padding: 28px 16px; vertical-align: middle;">
-                                                                <div style="font-size: 32px; line-height: 32px; margin-bottom: 12px;">&#128230;</div>
+                                                                <div style="width: 40px; height: 40px; margin: 0 auto 12px;"><img src="${EMAIL_ASSETS_BASE}/icon-platform.png" width="40" height="40" alt="Stocks" style="display: block; width: 40px; height: 40px;"></div>
                                                                 <h3 style="margin: 0 0 8px; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2;">Stocks</h3>
                                                                 <p style="margin: 0; color: rgba(255,255,255,0.7); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; line-height: 1.5;">Inventaire automatis&eacute; et alertes de r&eacute;approvisionnement</p>
                                                             </td>
@@ -447,7 +449,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                                             <p style="margin: 0; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 18px; font-weight: 600;">Oliver Van Droogenbroeck</p>
                                                                             <p style="margin: 3px 0 0; color: rgba(255,255,255,0.5); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300;">D&eacute;veloppeur Web &middot; Bruxelles</p>
                                                                             <p style="margin: 8px 0 0;">
-                                                                                <a href="https://olivervdb.com" style="color: #e7c5f8; font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 500; text-decoration: none;">olivervdb.com</a>
+                                                                                <a href="https://olivervdb.com" style="color: #a78bfa; font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 500; text-decoration: none;">olivervdb.com</a>
                                                                                 <span style="color: rgba(255,255,255,0.2); margin: 0 6px;">&middot;</span>
                                                                                 <a href="mailto:webdev@olivervdb.com" style="color: rgba(255,255,255,0.5); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; text-decoration: none;">webdev@olivervdb.com</a>
                                                                                 <span style="color: rgba(255,255,255,0.2); margin: 0 6px;">&middot;</span>
@@ -463,8 +465,8 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                                     <table width="100%" border="0" cellpadding="10" cellspacing="0" role="presentation">
                                                         <tr>
                                                             <td style="text-align: center;">
-                                                                <a href="mailto:webdev@olivervdb.com?subject=Demande%20de%20renseignements%20-%20Site%20web" style="color: #0d0b0e; text-decoration: none;">
-                                                                    <span style="background: #e7c5f8; background-color: #e7c5f8; border-radius: 60px; color: #0d0b0e; display: inline-block; font-family: 'Fira Sans', sans-serif; font-size: 17px; font-weight: 500; padding: 14px 36px; text-align: center; letter-spacing: 0.3px;">Me contacter &rarr;</span>
+                                                                <a href="mailto:webdev@olivervdb.com?subject=Demande%20de%20renseignements%20-%20Site%20web" style="color: #ffffff; text-decoration: none;">
+                                                                    <span style="background: linear-gradient(135deg, #a78bfa, #60a5fa); background-color: #a78bfa; border-radius: 60px; color: #ffffff; display: inline-block; font-family: 'Fira Sans', sans-serif; font-size: 17px; font-weight: 500; padding: 14px 36px; text-align: center; letter-spacing: 0.3px;">Me contacter &rarr;</span>
                                                                 </a>
                                                             </td>
                                                         </tr>
@@ -675,7 +677,7 @@ export function formatProposalBody(text: string): string {
       const items = listItems
         .map(
           (item) =>
-            `<tr><td style="vertical-align: top; padding: 0 8px 0 0; color: #e7c5f8; font-family: 'Fira Sans', sans-serif; font-size: 17px; line-height: 1.7;">&#10003;</td><td style="color: rgba(255,255,255,0.85); font-family: 'Fira Sans', sans-serif; font-size: 17px; font-weight: 300; line-height: 1.7;">${boldify(esc(item))}</td></tr>`
+            `<tr><td style="vertical-align: top; padding: 0 8px 0 0; color: #a78bfa; font-family: 'Fira Sans', sans-serif; font-size: 17px; line-height: 1.7;">&#10003;</td><td style="color: rgba(255,255,255,0.85); font-family: 'Fira Sans', sans-serif; font-size: 17px; font-weight: 300; line-height: 1.7;">${boldify(esc(item))}</td></tr>`
         )
         .join("");
       htmlParts.push(
@@ -700,7 +702,7 @@ export function formatProposalBody(text: string): string {
       flushList();
       htmlParts.push(
         `<div style="height: 20px; line-height: 20px; font-size: 1px;">&nbsp;</div>` +
-          `<h3 style="margin: 0 0 12px; color: #e7c5f8; font-family: 'Fira Sans', sans-serif; font-size: 20px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">${esc(allCapsMatch[1])}</h3>`
+          `<h3 style="margin: 0 0 12px; color: #a78bfa; font-family: 'Fira Sans', sans-serif; font-size: 20px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">${esc(allCapsMatch[1])}</h3>`
       );
       continue;
     }
@@ -892,7 +894,7 @@ export function buildFollowUpHtmlEmail(
                                                                             <p style="margin: 0; color: #ffffff; font-family: 'Fira Sans', sans-serif; font-size: 18px; font-weight: 600;">Oliver Van Droogenbroeck</p>
                                                                             <p style="margin: 3px 0 0; color: rgba(255,255,255,0.5); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300;">D&eacute;veloppeur Web &middot; Bruxelles</p>
                                                                             <p style="margin: 8px 0 0;">
-                                                                                <a href="https://olivervdb.com" style="color: #e7c5f8; font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 500; text-decoration: none;">olivervdb.com</a>
+                                                                                <a href="https://olivervdb.com" style="color: #a78bfa; font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 500; text-decoration: none;">olivervdb.com</a>
                                                                                 <span style="color: rgba(255,255,255,0.2); margin: 0 6px;">&middot;</span>
                                                                                 <a href="mailto:webdev@olivervdb.com" style="color: rgba(255,255,255,0.5); font-family: 'Fira Sans', sans-serif; font-size: 15px; font-weight: 300; text-decoration: none;">webdev@olivervdb.com</a>
                                                                                 <span style="color: rgba(255,255,255,0.2); margin: 0 6px;">&middot;</span>
@@ -908,8 +910,8 @@ export function buildFollowUpHtmlEmail(
                                                     <table width="100%" border="0" cellpadding="10" cellspacing="0" role="presentation">
                                                         <tr>
                                                             <td style="text-align: center;">
-                                                                <a href="mailto:webdev@olivervdb.com?subject=Demande%20de%20renseignements%20-%20Site%20web" style="color: #0d0b0e; text-decoration: none;">
-                                                                    <span style="background: #e7c5f8; background-color: #e7c5f8; border-radius: 60px; color: #0d0b0e; display: inline-block; font-family: 'Fira Sans', sans-serif; font-size: 17px; font-weight: 500; padding: 14px 36px; text-align: center; letter-spacing: 0.3px;">Me contacter &rarr;</span>
+                                                                <a href="mailto:webdev@olivervdb.com?subject=Demande%20de%20renseignements%20-%20Site%20web" style="color: #ffffff; text-decoration: none;">
+                                                                    <span style="background: linear-gradient(135deg, #a78bfa, #60a5fa); background-color: #a78bfa; border-radius: 60px; color: #ffffff; display: inline-block; font-family: 'Fira Sans', sans-serif; font-size: 17px; font-weight: 500; padding: 14px 36px; text-align: center; letter-spacing: 0.3px;">Me contacter &rarr;</span>
                                                                 </a>
                                                             </td>
                                                         </tr>
