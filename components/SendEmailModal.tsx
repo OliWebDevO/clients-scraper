@@ -91,31 +91,36 @@ export function SendEmailModal({
   const followUpVariant = selectedTemplate?.body ? getFollowUpVariant(selectedTemplate.body) : null;
 
   useEffect(() => {
-    async function fetchTemplates() {
-      const { data } = await supabase
+    if (open) {
+      setSelectedTemplateId("");
+      supabase
         .from("email_templates")
         .select("id, name, subject, body, is_default, created_at, updated_at")
-        .order("is_default", { ascending: false });
-      if (data) {
-        setTemplates(data);
-        const htmlTemplate = data.find((t) => t.body === HTML_TEMPLATE_MARKER);
-        if (htmlTemplate) {
-          setSelectedTemplateId(htmlTemplate.id);
-        } else {
-          const defaultTemplate = data.find((t) => t.is_default);
-          if (defaultTemplate) {
-            setSelectedTemplateId(defaultTemplate.id);
+        .order("is_default", { ascending: false })
+        .then(({ data }) => {
+          if (data) {
+            setTemplates(data);
           }
-        }
-      }
-    }
-    if (open) {
-      fetchTemplates();
+        });
       setShowHtmlPreview(false);
       setShowFollowUpPreview(false);
       setActiveTab("template");
     }
   }, [open]);
+
+  // Select default template after templates are loaded
+  useEffect(() => {
+    if (templates.length > 0 && !selectedTemplateId) {
+      const htmlTemplate =
+        templates.find((t) => t.body?.trim() === HTML_TEMPLATE_MARKER) ||
+        templates.find((t) => t.name?.toLowerCase().includes("design"));
+      const fallback = templates.find((t) => t.is_default);
+      const pick = htmlTemplate || fallback;
+      if (pick) {
+        setSelectedTemplateId(pick.id);
+      }
+    }
+  }, [templates, selectedTemplateId]);
 
   // Populate HTML template fields when business or template changes
   useEffect(() => {
