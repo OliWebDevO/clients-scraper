@@ -278,6 +278,7 @@ export function SendEmailModal({
         "Je suis d\u00E9veloppeur web \u00E0 Bruxelles et je me permets de vous contacter car je pense que votre entreprise pourrait b\u00E9n\u00E9ficier d'une pr\u00E9sence en ligne moderne.\n\n" +
         "Je vous ai pr\u00E9par\u00E9 une courte proposition en pi\u00E8ce jointe.\n\n" +
         "N'h\u00E9sitez pas \u00E0 me contacter si cela vous int\u00E9resse, je serais ravi d'en discuter.\n\n" +
+        "Si vous voulez en savoir plus, parcourez mon site : https://olivervdb.com/\n\n" +
         "Bien cordialement,\nOliver Van Droogenbroeck";
       await navigator.clipboard.writeText(message);
 

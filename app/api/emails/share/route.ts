@@ -20,7 +20,7 @@ export async function POST() {
     const genericOverrides: HtmlEmailOverrides = {
       heroHeading: "Un site web qui reflète la qualité de votre entreprise",
       heroSubtitle:
-        "Bonjour, je suis développeur web à Bruxelles. J'ai remarqué que **votre entreprise** pourrait bénéficier d'une présence en ligne moderne et performante.",
+        "Bonjour, je suis **développeur web** à Bruxelles. J'ai remarqué que votre entreprise pourrait bénéficier d'une présence en ligne **moderne & performante**.",
       personalMessage:
         "Avec votre excellente réputation dans votre secteur d'activité, un site web professionnel vous permettrait de convertir cette visibilité en clients potentiels.\n\n" +
         "Je peux également développer **une application sur mesure** pour simplifier votre gestion au quotidien : **comptabilité**, **planning du personnel** ou **suivi des stocks** ; le tout accessible depuis n'importe quel appareil.\n\n" +
