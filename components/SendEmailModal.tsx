@@ -262,13 +262,17 @@ export function SendEmailModal({
   const handleDownloadPdf = async () => {
     setIsSharing(true);
     try {
-      const res = await fetch("/api/emails/share", { method: "POST" });
+      const res = await fetch("/api/emails/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessName: business?.name }),
+      });
       if (!res.ok) throw new Error("PDF generation failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "proposition-web.pdf";
+      a.download = `${business?.name || "proposition"} - proposition.pdf`;
       a.click();
       URL.revokeObjectURL(url);
 
