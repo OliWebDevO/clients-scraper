@@ -42,6 +42,20 @@ export const BusinessTable = React.memo(function BusinessTable({
   onDraft,
   draftStatuses = {},
 }: BusinessTableProps) {
+  // Phone: one click copies the number (and shows ✓), the number itself is a tel: link
+  const [copiedPhoneId, setCopiedPhoneId] = React.useState<string | null>(null);
+  const copyPhone = async (business: Business) => {
+    if (!business.phone) return;
+    try {
+      await navigator.clipboard.writeText(business.phone);
+      setCopiedPhoneId(business.id);
+      setTimeout(() => setCopiedPhoneId((id) => (id === business.id ? null : id)), 2000);
+    } catch {
+      // clipboard blocked: the number stays visible and clickable
+    }
+  };
+  const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+
   const toggleSelection = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter((i) => i !== id));
@@ -192,6 +206,18 @@ export const BusinessTable = React.memo(function BusinessTable({
                     )}
                   </Button>
                 )}
+                {business.phone && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyPhone(business)}
+                    className="shrink-0 gap-1.5 px-2.5"
+                    aria-label={`Copier le numéro ${business.phone}`}
+                  >
+                    {copiedPhoneId === business.id ? <Check className="h-4 w-4 text-green-500" /> : <Phone className="h-4 w-4" />}
+                    <span className="text-xs">{copiedPhoneId === business.id ? "Copié" : business.phone}</span>
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -277,10 +303,14 @@ export const BusinessTable = React.memo(function BusinessTable({
                     <div className="flex flex-col">
                       <span className="font-medium">{business.name}</span>
                       {business.phone && (
-                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Phone className="h-3 w-3" />
+                        <a
+                          href={telHref(business.phone)}
+                          className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+                          title="Appeler"
+                        >
+                          <Phone className="h-3 w-3" aria-hidden="true" />
                           {business.phone}
-                        </span>
+                        </a>
                       )}
                     </div>
                   </td>
@@ -381,6 +411,17 @@ export const BusinessTable = React.memo(function BusinessTable({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {business.phone && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => copyPhone(business)}
+                          title={copiedPhoneId === business.id ? "Numéro copié" : `Copier le numéro (${business.phone})`}
+                          aria-label={`Copier le numéro ${business.phone}`}
+                        >
+                          {copiedPhoneId === business.id ? <Check className="h-4 w-4 text-green-500" /> : <Phone className="h-4 w-4" />}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

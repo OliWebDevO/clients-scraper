@@ -92,6 +92,8 @@ export async function middleware(request: NextRequest) {
 
 function addSecurityHeaders(response: NextResponse): void {
   response.headers.set("X-Frame-Options", "DENY");
+  // Private tool: keep every response (pages, API, assets) out of search engines
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-DNS-Prefetch-Control", "off");

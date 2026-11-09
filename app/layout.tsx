@@ -8,6 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Clients & Jobs Finder",
   description: "Find potential clients and job offers",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

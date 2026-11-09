@@ -1,0 +1,356 @@
+/**
+ * Prospect personalisation: what kind of web presence a business has,
+ * what a website brings to its sector, and the short first-contact email.
+ * Pure functions — safe to use on the client and the server.
+ */
+import { cityToFrench, extractCity } from "./utils";
+
+export type WebsiteProfile = "none" | "social" | "booking" | "outdated" | "ok";
+
+export interface ProspectData {
+  businessName: string;
+  rating: number | null;
+  reviewCount: number | null;
+  category: string | null;
+  address: string | null;
+  hasWebsite: boolean;
+  websiteUrl?: string | null;
+  websiteScore?: number | null;
+  websiteIssues?: string[] | null;
+  source?: string | null; // 'kbo' / 'kbo_person' (sole trader under own name) = found in the company register, not on Google
+  companyStartDate?: string | null; // ISO date, from KBO
+}
+
+/* ── Web presence ── */
+
+// Hostname fragment → how to name it in the email
+const SOCIAL_PLATFORMS: Record<string, string> = {
+  "facebook.com": "votre page Facebook",
+  "fb.com": "votre page Facebook",
+  "fb.me": "votre page Facebook",
+  "instagram.com": "votre compte Instagram",
+  "tiktok.com": "votre compte TikTok",
+  "linktr.ee": "votre page Linktree",
+  "linkedin.com": "votre page LinkedIn",
+  "business.site": "votre fiche Google",
+  "g.page": "votre fiche Google",
+  "wa.me": "WhatsApp",
+};
+
+const BOOKING_PLATFORMS: Record<string, string> = {
+  "treatwell.": "Treatwell",
+  "planity.": "Planity",
+  "salonkee.": "Salonkee",
+  "fresha.": "Fresha",
+  "booksy.": "Booksy",
+  "thefork.": "TheFork",
+  "lafourchette.": "TheFork",
+  "resengo.": "Resengo",
+  "zenchef.": "Zenchef",
+  "deliveroo.": "Deliveroo",
+  "ubereats.": "Uber Eats",
+  "takeaway.com": "Takeaway",
+  "doctolib.": "Doctolib",
+  "doctoranytime.": "Doctoranytime",
+  "calendly.com": "Calendly",
+  "setmore.com": "Setmore",
+};
+
+function hostnameOf(url: string): string | null {
+  try {
+    const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return new URL(normalized).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/** Name of the social/booking platform behind a URL, or null for a real website */
+export function getPlatform(url: string | null | undefined): { kind: "social" | "booking"; label: string } | null {
+  if (!url) return null;
+  const host = hostnameOf(url);
+  if (!host) return null;
+  for (const [fragment, label] of Object.entries(SOCIAL_PLATFORMS)) {
+    if (host === fragment || host.endsWith(`.${fragment}`)) return { kind: "social", label };
+  }
+  for (const [fragment, label] of Object.entries(BOOKING_PLATFORMS)) {
+    if (host.includes(fragment)) return { kind: "booking", label };
+  }
+  return null;
+}
+
+/** Score below which a real website is considered fine (matches the scraper filter) */
+export const GOOD_WEBSITE_SCORE = 25;
+
+export function getWebsiteProfile(data: Pick<ProspectData, "hasWebsite" | "websiteUrl" | "websiteScore">): WebsiteProfile {
+  if (!data.hasWebsite || !data.websiteUrl) return "none";
+  const platform = getPlatform(data.websiteUrl);
+  if (platform) return platform.kind;
+  if (data.websiteScore != null && data.websiteScore < GOOD_WEBSITE_SCORE) return "ok";
+  return "outdated";
+}
+
+export function websiteDomain(url: string | null | undefined): string | null {
+  return url ? hostnameOf(url) : null;
+}
+
+/* ── Website issues in plain French (for the business owner, not a developer) ── */
+
+const ISSUE_PHRASES: Array<{ match: RegExp; phrase: string }> = [
+  { match: /viewport|responsive|mobile/i, phrase: "il ne s'adapte pas bien aux téléphones, alors que la majorité de vos visiteurs arrivent depuis un mobile" },
+  { match: /https/i, phrase: "il n'est pas sécurisé (pas de HTTPS) : certains navigateurs affichent « Non sécurisé » à vos visiteurs" },
+  { match: /chargement lent/i, phrase: "il met du temps à s'afficher, et beaucoup de visiteurs partent avant" },
+  { match: /copyright obsolète/i, phrase: "il semble ne plus avoir été mis à jour depuis plusieurs années" },
+  { match: /obsolète|tables pour la mise en page/i, phrase: "il repose sur une technique ancienne qui le rend difficile à faire évoluer" },
+  { match: /meta tags|seo/i, phrase: "il est peu optimisé pour ressortir dans les recherches Google" },
+];
+
+/** Up to `max` client-friendly issue sentences, most persuasive first */
+export function plainIssues(issues: string[] | null | undefined, max = 2): string[] {
+  if (!issues?.length) return [];
+  const result: string[] = [];
+  for (const { match, phrase } of ISSUE_PHRASES) {
+    if (result.length >= max) break;
+    if (issues.some((i) => match.test(i)) && !result.includes(phrase)) result.push(phrase);
+  }
+  return result;
+}
+
+/* ── Sector pitch ── */
+
+interface SectorPitch {
+  /** What a website concretely brings in this sector (one sentence) */
+  benefit: string;
+  /** What a visitor can't do without a site: "pas de site pour …" */
+  showcase: string;
+}
+
+const SECTOR_PITCHES: Array<{ match: RegExp; pitch: SectorPitch }> = [
+  {
+    match: /restaur|coffee|caf[eé]|salon de th[eé]|tea\b|lunch|brunch|juice|bubble|brasserie|d[eé]bits? de boissons|pizzeria|bistro|trattoria|caf[eé]|bar\b|snack|friterie|traiteur|sushi|kebab|burger|tapas|food/i,
+    pitch: { benefit: "Pour un établissement comme le vôtre, un site avec votre carte à jour, vos photos et la réservation en ligne fait souvent la différence quand un client hésite entre deux adresses.", showcase: "découvrir votre carte, vos horaires ou l'ambiance du lieu" },
+  },
+  {
+    match: /coiff|barb|beaut|esth[eé]ti|ongle|nail|manucure|maquill|spa\b|tatou|piercing|cils|bronzage/i,
+    pitch: { benefit: "Pour un salon, un site avec vos prestations, vos tarifs et la prise de rendez-vous en ligne remplit l'agenda sans passer vos journées au téléphone.", showcase: "voir vos prestations, vos tarifs ou prendre rendez-vous" },
+  },
+  {
+    match: /pharmac|apotheek|parapharm/i,
+    pitch: {
+      benefit: "Pour une pharmacie, un site avec vos horaires, vos services (conseils, préparations, location de matériel…) et vos coordonnées aide les patients du quartier à venir chez vous plutôt qu'ailleurs.",
+      showcase: "connaître vos horaires, vos services ou vous contacter",
+    },
+  },
+  {
+    match: /massage|kin[eé]|ost[eé]o|psych|th[eé]rap|sophro|naturo|di[eé]t[eé]|yoga|pilates|m[eé]decin|dentist|infirm|podolog|logop|sant[eé]/i,
+    pitch: { benefit: "Pour un cabinet, un site clair avec vos spécialités, vos horaires et la prise de rendez-vous rassure les nouveaux patients avant même le premier contact.", showcase: "découvrir vos spécialités ou prendre rendez-vous" },
+  },
+  {
+    match: /fitness|salle de sport|sport|crossfit|boxe|danse|arts martiaux|coach/i,
+    pitch: { benefit: "Pour une salle ou un coach, un site avec le planning des cours, les tarifs et l'inscription en ligne transforme les curieux en membres.", showcase: "voir le planning des cours, vos tarifs ou s'inscrire" },
+  },
+  {
+    match: /boulang|p[aâ]tiss|boucher|charcut|fromag|chocolat|traiteur|[eé]picerie|primeur|caviste|vin|glacier|torr[eé]fact/i,
+    pitch: { benefit: "Pour un commerce de bouche, un site avec vos produits, vos horaires et la commande à emporter donne envie de passer la porte.", showcase: "découvrir vos produits, vos horaires ou commander" },
+  },
+  {
+    match: /plomb|[eé]lectric|chauff|menuis|peintr|carrel|toitur|couvreur|ma[cç]on|construct|r[eé]nov|jardin|parquet|vitr|serrur|chassis|ch[aâ]ssis|isolat|d[eé]m[eé]nag|nettoyage|entrepreneur|artisan/i,
+    pitch: { benefit: "Pour un artisan, un site avec vos réalisations en photos et un formulaire de demande de devis inspire confiance et vous amène des chantiers sans démarchage.", showcase: "voir vos réalisations ou vous demander un devis" },
+  },
+  {
+    match: /garage|carross|auto|moto|v[eé]lo|pneu|d[eé]pann/i,
+    pitch: { benefit: "Pour un garage, un site avec vos services, vos tarifs indicatifs et la prise de rendez-vous en ligne fait gagner du temps à vos clients comme à vous.", showcase: "voir vos services ou prendre rendez-vous" },
+  },
+  {
+    match: /comptab|fiduciaire|avocat|notaire|immobili|assurance|architect|conseil|consult|traduct|agence/i,
+    pitch: { benefit: "Pour un cabinet de services, un site professionnel qui présente clairement votre expertise est souvent ce qu'un futur client consulte avant de vous appeler.", showcase: "comprendre votre expertise ou vous contacter" },
+  },
+  {
+    match: /boutique|magasin|v[eê]tement|mode|chaussure|bijou|fleur|librair|cadeau|d[eé]co|meuble|opticien|animal|toilett/i,
+    pitch: { benefit: "Pour une boutique, un site qui montre vos produits et votre univers donne envie de venir — et peut aussi vendre en ligne quand le magasin est fermé.", showcase: "découvrir vos produits et votre univers" },
+  },
+];
+
+const DEFAULT_PITCH: SectorPitch = {
+  benefit: "Un site clair, rapide et bien référencé permet aux personnes qui vous cherchent sur Google de vous trouver, de vous faire confiance et de vous contacter en un clic.",
+  showcase: "en savoir plus sur vous ou vous contacter facilement",
+};
+
+export function getSectorPitch(category: string | null | undefined): SectorPitch {
+  if (!category) return DEFAULT_PITCH;
+  return SECTOR_PITCHES.find((s) => s.match.test(category))?.pitch ?? DEFAULT_PITCH;
+}
+
+/* ── Reputation (only claim what is true) ── */
+
+export function formatRating(rating: number): string {
+  return rating.toLocaleString("fr-BE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+/** A reputation phrase, or null when the rating doesn't justify a compliment */
+export function reputationPhrase(rating: number | null, reviewCount: number | null): string | null {
+  if (rating == null || reviewCount == null) return null;
+  if (rating >= 4.5 && reviewCount >= 20) return `vos ${reviewCount} avis Google à ${formatRating(rating)}/5`;
+  if (rating >= 4.2 && reviewCount >= 10) return `votre très bonne réputation sur Google (${formatRating(rating)}/5)`;
+  return null;
+}
+
+/* ── Name & city helpers ── */
+
+/** Remove Google Maps suffixes like "Chez Marco - Ixelles" or "Salon X | Coiffeur Bruxelles" */
+// Built at runtime: the TS target (ES2017) rejects \p{…} in regex literals
+const EMOJI = new RegExp("[\\p{Extended_Pictographic}\\uFE0F\\u200D]", "gu");
+
+export function cleanBusinessName(name: string, city?: string | null): string {
+  // Drop emojis ("Medphar Pharmacy💊") and the legal form, which nobody uses when talking about their own shop
+  let cleaned = name
+    .replace(EMOJI, "")
+    .replace(/\s{2,}/g, " ")
+    .split(" | ")[0]
+    .replace(/[\s,]+\(?(srl|sprl|sa|sc|scrl|snc|scs|asbl|bv|bvba|nv|cv|vof|vzw|comm\.?\s?v)\.?\)?$/i, "")
+    .trim();
+  const dash = cleaned.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  if (dash) {
+    const tail = dash[2].toLowerCase();
+    const isLocation =
+      /bruxelles|brussel|brussels|belgique|belgium/.test(tail) || (!!city && tail.includes(city.toLowerCase()));
+    if (isLocation) cleaned = dash[1].trim();
+  }
+  return cleaned;
+}
+
+export function getCity(address: string | null | undefined): string | null {
+  const city = extractCity(address);
+  return city ? cityToFrench(city) : null;
+}
+
+/** Started within the last 12 months */
+export function isRecentlyStarted(startDate: string | null | undefined): boolean {
+  if (!startDate) return false;
+  const started = new Date(startDate).getTime();
+  return !Number.isNaN(started) && Date.now() - started < 365 * 86400000;
+}
+
+/* ── First-contact email (short, plain text) ── */
+
+export const SENDER = {
+  name: "Oliver Van Droogenbroeck",
+  title: "Développeur web · Bruxelles",
+  email: "webdev@olivervdb.com",
+  website: "olivervdb.com",
+  // From SENDER_PHONE in .env.local (exposed to the browser via next.config.ts)
+  phone: process.env.SENDER_PHONE || "",
+};
+
+/** 0465831107 → 0465 83 11 07 (Belgian mobile), other formats unchanged */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return /^04\d{8}$/.test(digits) ? digits.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})$/, "$1 $2 $3 $4") : phone;
+}
+
+/** No email in the signature: they are replying to it already. The phone is the shortest path to a call. */
+export function signature(): string {
+  const contact = [SENDER.phone && formatPhone(SENDER.phone), SENDER.website].filter(Boolean).join(" · ");
+  return `${SENDER.name}\n${SENDER.title}\n${contact}`;
+}
+
+/** Short cold email (~120 words): their numbers first, what they lose, then one concrete call to action */
+export function generateFirstContactEmail(data: ProspectData): { subject: string; body: string } {
+  const city = getCity(data.address);
+  const name = cleanBusinessName(data.businessName, city);
+  const profile = getWebsiteProfile(data);
+  const platform = getPlatform(data.websiteUrl);
+  const { showcase } = getSectorPitch(data.category);
+  const fromKbo = !!data.source?.startsWith("kbo");
+  const isPerson = data.source === "kbo_person";
+  const strongReputation =
+    data.rating != null && data.reviewCount != null && data.rating >= 4.4 && data.reviewCount >= 25;
+  const goodRating = data.rating != null && data.reviewCount != null && data.rating >= 4.0 && data.reviewCount >= 5;
+  const stars = data.rating != null ? formatRating(data.rating) : "";
+  // No rating worth quoting: open with a question about their clients instead (never about my own search)
+  const question = !fromKbo && !strongReputation && !goodRating;
+
+  // 1. Hook: about them, with facts
+  let hook: string;
+  if (fromKbo) {
+    hook = isRecentlyStarted(data.companyStartDate)
+      ? `Félicitations pour le lancement de ${isPerson ? "votre activité" : name}${city ? ` à ${city}` : ""} !`
+      : `J'ai découvert ${isPerson ? "votre activité" : name}${city ? ` à ${city}` : ""} dans le registre des entreprises.`;
+  } else if (strongReputation) {
+    hook = `${data.reviewCount} avis à ${stars}/5 sur Google : ${name} fait clairement les choses bien.`;
+  } else if (goodRating) {
+    hook = `Vos clients notent ${name} ${stars}/5 sur Google${city ? `, à ${city}` : ""}.`;
+  } else {
+    hook = `Petite question : quand un nouveau client entend parler de ${name}${city ? ` à ${city}` : ""}, que trouve-t-il en ligne ?`;
+  }
+
+  // 2. The gap, and 3. what it costs them
+  let gap: string;
+  let cost: string;
+  let subject: string;
+  const platformName = platform?.label.replace(/^votre (page|compte|fiche) /, "") ?? "";
+  switch (profile) {
+    case "social":
+      gap = question
+        ? `Aujourd'hui, uniquement ${platform?.label ?? "vos réseaux sociaux"} : pas de site pour ${showcase}.`
+        : `Mais en dehors de ${platform?.label ?? "vos réseaux sociaux"}, impossible de vous trouver en ligne : pas de site pour ${showcase}.`;
+      cost = `Ces pages ressortent peu sur Google, et une partie des clients qui hésitent choisit l'adresse d'à côté, simplement parce qu'elle donne plus envie en ligne.`;
+      subject = `${name} mérite mieux qu'une page ${platformName || "sur les réseaux"}`;
+      break;
+    case "booking":
+      gap = question
+        ? `Aujourd'hui, il tombe sur ${platform?.label ?? "une plateforme de réservation"}, qui affiche vos concurrents juste à côté de vous.`
+        : `Mais vos réservations passent par ${platform?.label ?? "une plateforme"}, qui affiche vos concurrents juste à côté de vous.`;
+      cost = `Un site à votre nom, avec votre propre bouton de réservation, garde ces clients chez vous.`;
+      subject = `Un site à votre nom pour ${name}`;
+      break;
+    case "outdated":
+    case "ok": {
+      const issues = plainIssues(data.websiteIssues);
+      const domain = websiteDomain(data.websiteUrl) ?? "votre site";
+      const opening = question ? `Aujourd'hui, il tombe sur ${domain}` : `Mais en ouvrant ${domain}`;
+      gap = issues.length
+        ? `${opening}, et j'ai remarqué qu'${issues.join(", et qu'")}.`
+        : `${opening}, et je trouve qu'il ne rend pas justice à ce que vous faites.`;
+      cost = `Résultat : une partie des visiteurs repart avant même de vous contacter.`;
+      subject = `Une remarque sur ${domain}`;
+      break;
+    }
+    default:
+      if (fromKbo) {
+        gap = `C'est le meilleur moment pour avoir un site : vos premiers clients vont vous chercher sur Google, et une présence soignée dès le départ fait toute la différence.`;
+        cost = "";
+        subject = isPerson ? "Félicitations pour votre lancement" : `Félicitations pour ${name}`;
+      } else {
+        gap = question
+          ? `Aujourd'hui, uniquement votre fiche Google : pas de site pour ${showcase}.`
+          : `Mais quand quelqu'un vous cherche, il ne trouve que votre fiche Google : pas de site pour ${showcase}.`;
+        cost = `Une partie des clients qui hésitent choisit l'adresse d'à côté, simplement parce qu'elle donne plus envie en ligne.`;
+        subject = strongReputation
+          ? `${name} : ${data.reviewCount} avis, mais pas de site`
+          : goodRating
+            ? `${name} : ${stars}/5 sur Google, mais pas de site`
+            : `Une question pour ${name}`;
+      }
+  }
+
+  // 4. Offer, 5. one low-friction call to action
+  const offer =
+    profile === "outdated" || profile === "ok"
+      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site en gardant votre contenu, beau, rapide sur mobile et bien placé sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
+      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : beaux, rapides sur mobile et bien placés sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`;
+  const cta = `Je peux vous montrer en 10 minutes à quoi pourrait ressembler le site de ${isPerson ? "votre activité" : name}, ${isPerson ? "par téléphone" : "par téléphone ou en passant vous voir"}. Cela vous intéresse ?`;
+
+  const body = [
+    "Bonjour,",
+    [hook, gap].join(" "),
+    cost,
+    offer,
+    cta,
+    `Bien cordialement,\n${signature()}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return { subject, body };
+}

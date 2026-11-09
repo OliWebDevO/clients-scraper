@@ -14,6 +14,13 @@ export interface Business {
   location_query: string | null;
   investigated: boolean; // Mark as already looked at
   viable: boolean | null; // null = not decided, true = viable, false = not viable
+  email: string | null; // found on the website, or the last address an email was sent to
+  do_not_contact: boolean; // opted out — never email again
+  replied: boolean; // answered: no automatic follow-up
+  source: string | null; // 'google_maps' | 'kbo'
+  kbo_number: string | null; // Belgian company number (BCE/KBO)
+  legal_person: boolean | null; // KBO: company (true) or sole trader (false)
+  company_start_date: string | null; // from KBO: when the business was created
   created_at: string;
   updated_at: string;
 }
@@ -96,6 +103,7 @@ export interface SentEmail {
   subject: string;
   body: string;
   status: "sent" | "delivered" | "opened" | "failed";
+  kind: "first" | "followup";
   resend_id: string | null;
   sent_at: string;
 }

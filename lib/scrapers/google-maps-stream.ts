@@ -1,7 +1,28 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 import type { Business } from "@/lib/types";
 import { delay, randomDelay, parseRating, parseReviewCount } from "@/lib/utils";
-import { analyzeWebsites } from "@/lib/website-analyzer";
+import { analyzeWebsites, pickEmail } from "@/lib/website-analyzer";
+import { getPlatform, GOOD_WEBSITE_SCORE } from "@/lib/prospect";
+
+/** Map a scraped business to a `businesses` row (shared by the stream route, the API route and the cron) */
+export function businessToRow(business: Partial<Business>, fallbackLocation?: string): Record<string, unknown> {
+  return {
+    name: business.name,
+    address: business.address || null,
+    phone: business.phone || null,
+    rating: business.rating || null,
+    review_count: business.review_count || null,
+    category: business.category || null,
+    google_maps_url: business.google_maps_url || null,
+    has_website: business.has_website || false,
+    website_url: business.website_url || null,
+    website_score: business.website_score ?? null,
+    website_issues: business.website_issues || null,
+    email: business.email || null,
+    source: "google_maps",
+    location_query: business.location_query || fallbackLocation || null,
+  };
+}
 
 export interface GoogleMapsScraperConfig {
   location: string;
@@ -260,8 +281,17 @@ export async function scrapeGoogleMapsWithProgress(
       await randomDelay(2000, 4000);
     }
 
+    // Facebook / Instagram / Treatwell… are not real websites: keep them as prospects without analysing
+    for (const business of allBusinesses) {
+      const platform = getPlatform(business.website_url);
+      if (platform) {
+        business.website_score = null;
+        business.website_issues = [`Pas de vrai site : uniquement ${platform.label.replace(/^votre (page|compte|fiche) /, "")}`];
+      }
+    }
+
     // Phase: Batch analyze all websites in parallel
-    const businessesWithWebsites = allBusinesses.filter((b) => b.website_url);
+    const businessesWithWebsites = allBusinesses.filter((b) => b.website_url && !getPlatform(b.website_url));
     if (businessesWithWebsites.length > 0) {
       onProgress({
         current: allBusinesses.length,
@@ -280,13 +310,14 @@ export async function scrapeGoogleMapsWithProgress(
         if (analysis) {
           business.website_score = analysis.score;
           business.website_issues = analysis.issues;
+          business.email = pickEmail(analysis.emails, analysis.url);
         }
       }
 
       // Remove businesses with GOOD websites (score < 25)
       const beforeCount = allBusinesses.length;
       const filtered = allBusinesses.filter((b) => {
-        if (b.has_website && b.website_score !== null && b.website_score !== undefined && b.website_score < 25) {
+        if (b.has_website && b.website_score !== null && b.website_score !== undefined && b.website_score < GOOD_WEBSITE_SCORE) {
           console.log(`Skipping ${b.name} - good website (score: ${b.website_score})`);
           return false;
         }
@@ -372,10 +403,12 @@ async function scrollResults(page: Page, scrollCount: number): Promise<void> {
 }
 
 function sortBusinesses(businesses: Partial<Business>[]): Partial<Business>[] {
+  // No real website (none, or only a social/booking page) first
+  const noRealSite = (x: Partial<Business>) => !x.has_website || !!getPlatform(x.website_url);
   return [...businesses].sort((a, b) => {
-    if (!a.has_website && b.has_website) return -1;
-    if (a.has_website && !b.has_website) return 1;
-    if (!a.has_website && !b.has_website) return (a.rating || 0) - (b.rating || 0);
+    if (noRealSite(a) && !noRealSite(b)) return -1;
+    if (!noRealSite(a) && noRealSite(b)) return 1;
+    if (noRealSite(a) && noRealSite(b)) return (b.rating || 0) - (a.rating || 0);
     const aScore = a.website_score ?? -1;
     const bScore = b.website_score ?? -1;
     return bScore - aScore;

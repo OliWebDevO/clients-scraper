@@ -23,6 +23,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FollowUpSettingsCard } from "@/components/FollowUpSettingsCard";
+import { DailyOutreachCard } from "@/components/DailyOutreachCard";
 import { useToast } from "@/hooks/use-toast";
 import type { ScrapeSchedule } from "@/lib/types";
 import { JOB_PLATFORMS, DEFAULT_KEYWORDS } from "@/lib/types";
@@ -186,6 +188,10 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+
+      <DailyOutreachCard />
+
+      <FollowUpSettingsCard />
 
       {/* Schedule Manager */}
       <Card>

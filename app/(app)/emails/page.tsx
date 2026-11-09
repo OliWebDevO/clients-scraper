@@ -182,7 +182,7 @@ export default function EmailsPage() {
   const fetchSentEmails = async () => {
     const { data } = await supabase
       .from("sent_emails")
-      .select("id, recipient_email, subject, body, status, sent_at, business_id, template_id, resend_id")
+      .select("id, recipient_email, subject, body, status, kind, sent_at, business_id, template_id, resend_id")
       .order("sent_at", { ascending: false })
       .limit(20);
     setSentEmails(data || []);

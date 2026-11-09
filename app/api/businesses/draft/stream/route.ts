@@ -4,6 +4,7 @@ import { downloadAndParseDocument } from "@/lib/document-parser";
 import { generateDocx } from "@/lib/docx-generator";
 import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 import { extractCity, categoryToPhrase, cityToFrench } from "@/lib/utils";
+import { SENDER } from "@/lib/prospect";
 
 export const maxDuration = 120; // 2 minutes max
 
@@ -148,7 +149,19 @@ export async function POST(request: NextRequest) {
           website_issues: websiteIssues || "Aucun probleme detecte",
         };
 
-        const customizedText = replaceProposalVariables(proposalText, variables);
+        // The uploaded Word template uses [Bracket] placeholders: map them too
+        const bracketPlaceholders: Record<string, string> = {
+          "Nom du Client": business.name || "",
+          "Nom de l'entreprise": business.name || "",
+          "Ville": city,
+          "Votre nom": SENDER.name,
+          "Votre email": SENDER.email,
+          "Votre téléphone": process.env.SENDER_PHONE || "",
+        };
+        let customizedText = replaceProposalVariables(proposalText, variables);
+        for (const [placeholder, value] of Object.entries(bracketPlaceholders)) {
+          customizedText = customizedText.split(`[${placeholder}]`).join(value);
+        }
 
         sendEvent("progress", {
           progress: 75,

@@ -269,3 +269,27 @@ Cron jobs are configured in `vercel.json` to run hourly.
 - [ ] More detailed job descriptions
 - [ ] Business phone number extraction
 - [ ] Dark/light theme toggle
+
+---
+
+## Prospecting (Nov 2026)
+
+**Setup:** run `doc/migration-prospecting.sql` once in the Supabase SQL Editor (adds `email`, `do_not_contact`, `source`, `kbo_number`, `company_start_date` + the `email_optouts` table). The clients page needs these columns.
+
+**Emails**
+- `lib/prospect.ts` — web presence profile (none / social page / booking platform / outdated site), sector pitch, plain-French website issues, reputation claim only when rating ≥ 4.2, short first-contact email.
+- The send modal opens on **"Premier contact (court, personnalisé)"**: ~130 words, plain text. Keep the designed HTML template for the follow-up.
+- `lib/email-checks.ts` — pre-send checks shown live in the modal; errors (leftover `{{var}}`, street instead of city, `undefined`…) block sending, also server-side.
+- "Relire avec l'IA" button → `/api/emails/review` (gpt-4o-mini).
+- Every email gets a plain-text part, an opt-out line and a `List-Unsubscribe` header. When someone replies "stop", open their email modal → **Ne plus contacter** (also stores the address in `email_optouts`).
+
+**Scraping**
+- The website analyser also collects contact emails (homepage, then contact page); the modal pre-fills them.
+- Facebook / Instagram / Treatwell / TheFork… "websites" are kept as prospects (no real site) instead of being filtered out.
+
+**KBO / BCE Open Data (new businesses)**
+- Download the free monthly "Full" export (registration required) on economie.fgov.be → *KBO Open Data*, unzip it.
+- `node --env-file=.env.local scripts/import-kbo.mjs <folder> --dry-run` then without `--dry-run`. Options: `--since-days=90`, `--zip=1000-1210`, `--keywords=coiffure,restauration`, `--limit=500`.
+- KBO businesses get an honest "félicitations pour le lancement" opener (not "found you on Google").
+
+**Login reset:** `node --env-file=.env.local scripts/set-password.mjs <email>`

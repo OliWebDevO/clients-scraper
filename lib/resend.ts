@@ -18,6 +18,8 @@ export interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
+  text?: string;
+  headers?: Record<string, string>;
   from?: string;
 }
 
@@ -25,6 +27,8 @@ export async function sendEmail({
   to,
   subject,
   html,
+  text,
+  headers,
   from = "Oliver Van Droogenbroeck <webdev@olivervdb.com>",
 }: SendEmailParams) {
   const resend = getResendClient();
@@ -34,6 +38,8 @@ export async function sendEmail({
     to,
     subject,
     html,
+    text,
+    headers,
   });
 
   if (result.error) {

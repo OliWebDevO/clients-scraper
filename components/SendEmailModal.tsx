@@ -21,10 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Mail, FileText, Eye, Check } from "lucide-react";
+import { Loader2, Mail, FileText, Eye, Check, AlertTriangle, XCircle, Sparkles, Ban, Search, Phone, MessageCircleReply } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Business, EmailTemplate } from "@/lib/types";
-import { replaceTemplateVariables, extractCity } from "@/lib/utils";
+import { replaceTemplateVariables } from "@/lib/utils";
+import { generateFirstContactEmail, getCity, getPlatform } from "@/lib/prospect";
+import { checkEmail, htmlToText } from "@/lib/email-checks";
 import {
   HTML_TEMPLATE_MARKER,
   buildHtmlEmail,
@@ -33,10 +35,29 @@ import {
   getFollowUpVariant,
   generateFollowUpDefaults,
   buildFollowUpHtmlEmail,
+  businessToEmailData,
   type HtmlEmailOverrides,
   type FollowUpVariant,
   type FollowUpOverrides,
 } from "@/lib/email-html-template";
+
+/** Built-in short first-contact email, generated per business (not stored in email_templates) */
+const FIRST_CONTACT_ID = "builtin-first-contact";
+const FIRST_CONTACT_TEMPLATE: EmailTemplate = {
+  id: FIRST_CONTACT_ID,
+  name: "Premier contact (court, personnalisé)",
+  subject: "",
+  body: "",
+  is_default: false,
+  created_at: "",
+  updated_at: "",
+};
+
+interface AiReview {
+  verdict: string;
+  problems: string[];
+  suggestions: string[];
+}
 
 interface SendEmailModalProps {
   open: boolean;
@@ -87,6 +108,16 @@ export function SendEmailModal({
   const [isSharing, setIsSharing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
+  // Opt-out + AI proofreading
+  const [doNotContact, setDoNotContact] = useState(false);
+  const [replied, setReplied] = useState(false);
+  const [aiReview, setAiReview] = useState<AiReview | null>(null);
+  const [aiReviewError, setAiReviewError] = useState<string | null>(null);
+  const [isReviewing, setIsReviewing] = useState(false);
+
+  // Recipient email: known, looked up on the website, or to be searched manually
+  const [emailLookup, setEmailLookup] = useState<"idle" | "searching" | "not_found" | "no_website">("idle");
+
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
   const isHtmlTemplate = selectedTemplate?.body === HTML_TEMPLATE_MARKER;
   const isFollowUpTemplate = selectedTemplate?.body ? isFollowUpMarker(selectedTemplate.body) : false;
@@ -100,41 +131,58 @@ export function SendEmailModal({
         .select("id, name, subject, body, is_default, created_at, updated_at")
         .order("is_default", { ascending: false })
         .then(({ data }) => {
-          if (data) {
-            setTemplates(data);
-          }
+          setTemplates([FIRST_CONTACT_TEMPLATE, ...(data || [])]);
         });
       setShowHtmlPreview(false);
       setShowFollowUpPreview(false);
       setActiveTab("template");
+      setRecipientEmail(business?.email || "");
+      setDoNotContact(!!business?.do_not_contact);
+      setReplied(!!business?.replied);
+      setEmailLookup("idle");
+
+      // Unknown email: look for it on the business' own website
+      if (business && !business.email) {
+        const hasRealSite = !!business.website_url && !getPlatform(business.website_url);
+        if (!hasRealSite) {
+          setEmailLookup("no_website");
+        } else {
+          setEmailLookup("searching");
+          fetch("/api/businesses/find-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ businessId: business.id }),
+          })
+            .then((res) => res.json())
+            .then((result) => {
+              if (result.email) {
+                setRecipientEmail((current) => current || result.email);
+                setEmailLookup("idle");
+              } else {
+                setEmailLookup("not_found");
+              }
+            })
+            .catch(() => setEmailLookup("not_found"));
+        }
+      }
+      setAiReview(null);
+      setAiReviewError(null);
     }
   }, [open]);
 
   // Select default template after templates are loaded
   useEffect(() => {
+    // Default to the short first-contact email: a light, personal first touch lands
+    // in the inbox far more often than the designed HTML (keep that for the follow-up)
     if (templates.length > 0 && !selectedTemplateId) {
-      const htmlTemplate =
-        templates.find((t) => t.body?.trim() === HTML_TEMPLATE_MARKER) ||
-        templates.find((t) => t.name?.toLowerCase().includes("design"));
-      const fallback = templates.find((t) => t.is_default);
-      const pick = htmlTemplate || fallback;
-      if (pick) {
-        setSelectedTemplateId(pick.id);
-      }
+      setSelectedTemplateId(FIRST_CONTACT_ID);
     }
   }, [templates, selectedTemplateId]);
 
   // Populate HTML template fields when business or template changes
   useEffect(() => {
     if (isHtmlTemplate && business) {
-      const defaults = generateDefaults({
-        businessName: business.name,
-        rating: business.rating,
-        reviewCount: business.review_count,
-        category: business.category,
-        address: business.address,
-        hasWebsite: business.has_website,
-      });
+      const defaults = generateDefaults(businessToEmailData(business));
       setHtmlHeroHeading(defaults.heroHeading);
       setHtmlHeroSubtitle(defaults.heroSubtitle);
       setHtmlPersonalMessage(defaults.personalMessage);
@@ -145,14 +193,7 @@ export function SendEmailModal({
   useEffect(() => {
     if (isFollowUpTemplate && followUpVariant && business) {
       const defaults = generateFollowUpDefaults(
-        {
-          businessName: business.name,
-          rating: business.rating,
-          reviewCount: business.review_count,
-          category: business.category,
-          address: business.address,
-          hasWebsite: business.has_website,
-        },
+        businessToEmailData(business),
         followUpVariant
       );
       setFollowUpSubtitle(defaults.heroSubtitle);
@@ -162,20 +203,28 @@ export function SendEmailModal({
 
   useEffect(() => {
     if (activeTab === "template" && selectedTemplateId) {
+      if (selectedTemplateId === FIRST_CONTACT_ID) {
+        if (business) {
+          const generated = generateFirstContactEmail(businessToEmailData(business));
+          setSubject(generated.subject);
+          setBody(generated.body);
+        }
+        return;
+      }
       const template = templates.find((t) => t.id === selectedTemplateId);
       if (template) {
         setSubject(template.subject);
         setBody(template.body);
       }
     }
-  }, [selectedTemplateId, templates, activeTab]);
+  }, [selectedTemplateId, templates, activeTab, business?.id]);
 
   const getVariables = () => {
     if (!business) return {};
     return {
       business_name: business.name,
       owner_name: "",
-      city: extractCity(business.address) || "",
+      city: getCity(business.address) || "",
       address: business.address || "",
       phone: business.phone || "",
       category: business.category || "",
@@ -197,14 +246,7 @@ export function SendEmailModal({
   const htmlPreview =
     isHtmlTemplate && business
       ? buildHtmlEmail(
-          {
-            businessName: business.name,
-            rating: business.rating,
-            reviewCount: business.review_count,
-            category: business.category,
-            address: business.address,
-            hasWebsite: business.has_website,
-          },
+          businessToEmailData(business),
           currentOverrides
         ).replace(
           "</style>",
@@ -218,14 +260,7 @@ export function SendEmailModal({
   const followUpPreview =
     isFollowUpTemplate && followUpVariant && business
       ? buildFollowUpHtmlEmail(
-          {
-            businessName: business.name,
-            rating: business.rating,
-            reviewCount: business.review_count,
-            category: business.category,
-            address: business.address,
-            hasWebsite: business.has_website,
-          },
+          businessToEmailData(business),
           followUpVariant,
           { heroSubtitle: followUpSubtitle, bodyContent: followUpBody }
         ).replace(
@@ -233,6 +268,77 @@ export function SendEmailModal({
           ".row-content { width: 100% !important; }\n</style>"
         )
       : null;
+
+  // What will actually be sent, as plain text — fed to the checks and the AI proofreading
+  const sendingHtmlNow = isHtmlTemplate && activeTab === "template";
+  const sendingFollowUpNow = isFollowUpTemplate && activeTab === "template";
+  const outgoingText = sendingHtmlNow
+    ? htmlToText(htmlPreview || "")
+    : sendingFollowUpNow
+      ? htmlToText(followUpPreview || "")
+      : getProcessedContent(body);
+  const checks = checkEmail({
+    subject: getProcessedContent(subject),
+    text: outgoingText,
+    recipientEmail,
+    businessName: business?.name,
+  });
+
+  const handleAiReview = async () => {
+    setIsReviewing(true);
+    setAiReview(null);
+    setAiReviewError(null);
+    try {
+      const res = await fetch("/api/emails/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: getProcessedContent(subject),
+          text: outgoingText,
+          category: business?.category ?? null,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Relecture impossible");
+      setAiReview(result);
+    } catch (err) {
+      setAiReviewError(err instanceof Error ? err.message : "Relecture impossible");
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const handleToggleDoNotContact = async () => {
+    if (!business) return;
+    const next = !doNotContact;
+    setDoNotContact(next);
+    try {
+      const res = await fetch("/api/businesses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: business.id, do_not_contact: next }),
+      });
+      if (!(await res.json()).success) throw new Error();
+    } catch {
+      setDoNotContact(!next);
+    }
+  };
+
+  const handleToggleReplied = async () => {
+    if (!business) return;
+    const next = !replied;
+    setReplied(next);
+    try {
+      const res = await fetch("/api/businesses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: business.id, replied: next }),
+      });
+      if (!(await res.json()).success) throw new Error();
+    } catch {
+      setReplied(!next);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -346,6 +452,54 @@ export function SendEmailModal({
               onChange={(e) => setRecipientEmail(e.target.value)}
               required
             />
+            {emailLookup === "searching" && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                Recherche de l&apos;email sur le site&hellip;
+              </p>
+            )}
+            {business && !recipientEmail && (emailLookup === "not_found" || emailLookup === "no_website") && (() => {
+              const city = getCity(business.address) || "";
+              const query = `${business.name} ${city}`.trim();
+              const links = [
+                { label: "Google", href: `https://www.google.com/search?q=${encodeURIComponent(`"${business.name}" ${city} email`)}` },
+                { label: "Facebook", href: `https://www.facebook.com/search/top?q=${encodeURIComponent(query)}` },
+                { label: "Instagram", href: `https://www.google.com/search?q=${encodeURIComponent(`site:instagram.com ${query}`)}` },
+                ...(business.website_url ? [{ label: "Son site", href: business.website_url }] : []),
+              ];
+              return (
+                <div className="space-y-1.5 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground" aria-live="polite">
+                  <p>
+                    {emailLookup === "no_website"
+                      ? "Pas de site web, donc pas d'email trouvable automatiquement. Cherchez-le ici :"
+                      : "Aucun email trouvé sur le site. Cherchez-le ici :"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {links.map((link) => (
+                      <a
+                        key={link.label}
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-foreground hover:bg-muted"
+                      >
+                        <Search className="h-3 w-3" aria-hidden="true" />
+                        {link.label}
+                      </a>
+                    ))}
+                    {business.phone && (
+                      <a
+                        href={`tel:${business.phone.replace(/[^\d+]/g, "")}`}
+                        className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-foreground hover:bg-muted"
+                      >
+                        <Phone className="h-3 w-3" aria-hidden="true" />
+                        Ou appeler : {business.phone}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -638,13 +792,87 @@ export function SendEmailModal({
             </div>
           )}
 
-          <DialogFooter>
+          {/* Pre-send checks */}
+          {doNotContact && (
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+              <Ban className="mt-0.5 h-4 w-4 shrink-0" />
+              Ce business est marqu&eacute; &laquo; ne plus contacter &raquo;. L&apos;envoi est bloqu&eacute;.
+            </div>
+          )}
+          {(checks.errors.length > 0 || checks.warnings.length > 0) && (
+            <ul className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-sm" aria-label="V&eacute;rifications avant envoi">
+              {checks.errors.map((msg) => (
+                <li key={msg} className="flex items-start gap-2 text-red-400">
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span><span className="sr-only">Erreur : </span>{msg}</span>
+                </li>
+              ))}
+              {checks.warnings.map((msg) => (
+                <li key={msg} className="flex items-start gap-2 text-amber-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span><span className="sr-only">Attention : </span>{msg}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(aiReview || aiReviewError) && (
+            <div className="space-y-2 rounded-md border border-violet-500/40 bg-violet-500/10 p-3 text-sm" aria-live="polite">
+              {aiReviewError ? (
+                <p className="text-red-400">{aiReviewError}</p>
+              ) : aiReview && (
+                <>
+                  <p className="font-medium">Relecture IA : {aiReview.verdict}</p>
+                  {aiReview.problems.length > 0 && (
+                    <ul className="list-disc space-y-1 pl-5">
+                      {aiReview.problems.map((p) => <li key={p}>{p}</li>)}
+                    </ul>
+                  )}
+                  {aiReview.suggestions.length > 0 && (
+                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                      {aiReview.suggestions.map((p) => <li key={p}>{p}</li>)}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
               Cancel
+            </Button>
+            {business && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleToggleReplied}
+                className="gap-2"
+                aria-pressed={replied}
+                title="Un prospect qui a répondu ne reçoit pas de relance automatique"
+              >
+                <MessageCircleReply className={`h-4 w-4 ${replied ? "text-green-500" : ""}`} />
+                {replied ? "A répondu ✓" : "A répondu"}
+              </Button>
+            )}
+            {business && (
+              <Button type="button" variant="ghost" onClick={handleToggleDoNotContact} className="gap-2">
+                <Ban className="h-4 w-4" />
+                {doNotContact ? "Autoriser le contact" : "Ne plus contacter"}
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleAiReview}
+              disabled={isReviewing || outgoingText.length < 40}
+              className="gap-2"
+            >
+              {isReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Relire avec l&apos;IA
             </Button>
             {isHtmlTemplate && activeTab === "template" && (
               <Button
@@ -666,7 +894,7 @@ export function SendEmailModal({
             )}
             <Button
               type="submit"
-              disabled={isLoading || !recipientEmail || !subject || (!isHtmlTemplate && !isFollowUpTemplate && !body)}
+              disabled={isLoading || doNotContact || checks.errors.length > 0 || !recipientEmail || !subject || (!isHtmlTemplate && !isFollowUpTemplate && !body)}
             >
               {isLoading ? (
                 <>

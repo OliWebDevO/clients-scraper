@@ -23,6 +23,48 @@ export interface WebsiteAnalysis {
     hasAccessibility: boolean;
   };
   issues: string[];
+  emails: string[]; // contact addresses found on the homepage or contact page
+}
+
+const EMAIL_REGEX = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+// Addresses that are never the business' own inbox
+const IGNORED_EMAIL = /\.(png|jpe?g|gif|svg|webp)$|@(sentry|wixpress|example|domain|email|yourdomain|sentry-next)\.|^(noreply|no-reply|donotreply)@/i;
+
+/** Decode a Cloudflare-protected address (data-cfemail hex string) */
+function decodeCfEmail(hex: string): string {
+  const key = parseInt(hex.slice(0, 2), 16);
+  let out = "";
+  for (let i = 2; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16) ^ key);
+  return out;
+}
+
+// Text like "contact@shop.comrue Haute 5" glues the next word to the TLD: cut it back to a known TLD
+const KNOWN_TLDS = ["be", "com", "fr", "net", "org", "eu", "nl", "lu", "de", "ch", "uk", "io", "co", "info", "biz", "brussels", "vlaanderen", "wallonie", "shop", "studio", "art", "me", "pro", "email", "online", "store", "site", "app", "dev", "us", "es", "it", "pt", "ma"];
+
+function fixGluedTld(email: string): string | null {
+  const tld = email.slice(email.lastIndexOf(".") + 1);
+  if (KNOWN_TLDS.includes(tld)) return email;
+  const prefix = KNOWN_TLDS.filter((t) => tld.startsWith(t)).sort((a, b) => b.length - a.length)[0];
+  return prefix ? email.slice(0, email.length - tld.length + prefix.length) : null;
+}
+
+function extractEmails($: cheerio.CheerioAPI, html: string): string[] {
+  const found = new Set<string>();
+  $('a[href^="mailto:"]').each((_, el) => {
+    const addr = decodeURIComponent(($(el).attr("href") || "").slice(7).split("?")[0]).trim();
+    if (addr) found.add(addr);
+  });
+  $("[data-cfemail]").each((_, el) => {
+    const hex = $(el).attr("data-cfemail");
+    if (hex) found.add(decodeCfEmail(hex));
+  });
+  for (const match of $("body").text().match(EMAIL_REGEX) || []) found.add(match);
+  for (const match of html.match(EMAIL_REGEX) || []) found.add(match);
+  return [...found]
+    .map((e) => fixGluedTld(e.toLowerCase().replace(/[.,;:]+$/, "")))
+    .filter((e): e is string => !!e)
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(e) && !IGNORED_EMAIL.test(e))
+    .slice(0, 5);
 }
 
 const DEPRECATED_TAGS = [
@@ -56,6 +98,7 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
     hasFavicon: false,
     hasAccessibility: false,
   };
+  let emails: string[] = [];
 
   try {
     // Normalize URL
@@ -83,7 +126,7 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
     const MAX_REDIRECTS = 3;
 
     let response: Response;
-    let fetchUrl = normalizedUrl;
+    const fetchUrl = normalizedUrl;
 
     async function fetchWithSafeRedirects(
       url: string,
@@ -148,6 +191,32 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
 
     const html = await response.text();
     const $ = cheerio.load(html);
+
+    // Contact emails: homepage first, then the contact page
+    emails = extractEmails($, html);
+    if (emails.length === 0) {
+      const contactHref = $("a")
+        .filter((_, el) => /contact/i.test($(el).attr("href") || "") || /^\s*contact/i.test($(el).text()))
+        .first()
+        .attr("href");
+      if (contactHref) {
+        try {
+          const contactUrl = new URL(contactHref, normalizedUrl).toString();
+          if (new URL(contactUrl).hostname === new URL(normalizedUrl).hostname && isAllowedUrl(contactUrl)) {
+            const contactRes = await fetchWithSafeRedirects(contactUrl, {
+              headers: { "User-Agent": USER_AGENT },
+              signal: AbortSignal.timeout(6000),
+            });
+            if (contactRes.ok) {
+              const contactHtml = await contactRes.text();
+              emails = extractEmails(cheerio.load(contactHtml), contactHtml);
+            }
+          }
+        } catch {
+          // contact page unreachable — not a reason to fail the analysis
+        }
+      }
+    }
 
     // Check viewport meta tag (responsive/mobile)
     const viewportMeta = $('meta[name="viewport"]').attr("content");
@@ -260,10 +329,22 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
       score,
       checks,
       issues,
+      emails,
     };
   } catch (error) {
     console.error(`Erreur analyse ${url}:`, error);
     return null;
+  }
+}
+
+/** Prefer an address on the website's own domain (info@salon.be over a webdesigner's gmail) */
+export function pickEmail(emails: string[], websiteUrl: string): string | null {
+  if (!emails.length) return null;
+  try {
+    const host = new URL(websiteUrl).hostname.replace(/^www\./, "");
+    return emails.find((e) => e.endsWith(`@${host}`)) || emails[0];
+  } catch {
+    return emails[0];
   }
 }
 

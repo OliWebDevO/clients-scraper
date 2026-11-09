@@ -58,6 +58,7 @@ export default function ClientsPage() {
     minRating: "",
     category: "",
     hasWebsite: "",
+    source: "",
   });
 
   const { toast } = useToast();
@@ -85,7 +86,7 @@ export default function ClientsPage() {
 
     let query = supabase
       .from("businesses")
-      .select("id,name,address,phone,rating,review_count,category,google_maps_url,has_website,website_url,website_score,website_issues,location_query,investigated,viable,created_at,updated_at", { count: "exact" });
+      .select("id,name,address,phone,rating,review_count,category,google_maps_url,has_website,website_url,website_score,website_issues,location_query,investigated,viable,email,do_not_contact,replied,source,kbo_number,legal_person,company_start_date,created_at,updated_at", { count: "exact" });
 
     // --- Server-side filters ---
 
@@ -131,6 +132,18 @@ export default function ClientsPage() {
     // Has website
     if (filters.hasWebsite && filters.hasWebsite !== "all") {
       query = query.eq("has_website", filters.hasWebsite === "yes");
+    }
+
+    // Source: Google Maps scrape or KBO import ('kbo' and 'kbo_person')
+    if (filters.source === "google_maps") {
+      query = query.eq("source", "google_maps");
+    } else if (filters.source === "kbo_call") {
+      // Sole traders: no unsolicited email allowed, call them instead
+      query = query.like("source", "kbo%").eq("legal_person", false).not("phone", "is", null)
+        .order("company_start_date", { ascending: false, nullsFirst: false });
+    } else if (filters.source === "kbo") {
+      // Newest businesses first: the launch is the hook
+      query = query.like("source", "kbo%").order("company_start_date", { ascending: false, nullsFirst: false });
     }
 
     // Order & paginate
@@ -486,7 +499,7 @@ export default function ClientsPage() {
 
   const handleClearFilters = () => {
     setSearchTerm("");
-    setFilters({ investigated: "", viable: "not-red", minRating: "", category: "", hasWebsite: "" });
+    setFilters({ investigated: "", viable: "not-red", minRating: "", category: "", hasWebsite: "", source: "" });
   };
 
   return (

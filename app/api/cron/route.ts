@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { getScraperForPlatform } from "@/lib/scrapers";
-import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
+import { scrapeGoogleMapsWithProgress, businessToRow } from "@/lib/scrapers/google-maps-stream";
 import type { ScrapeSchedule, JobPlatform } from "@/lib/types";
+import { verifyCronSecret } from "@/lib/cron-auth";
 
 export const maxDuration = 300;
-
-// Verify cron secret to prevent unauthorized access
-function verifyCronSecret(request: NextRequest): boolean {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) {
-    console.error("CRON_SECRET is not configured - rejecting request");
-    return false;
-  }
-
-  return authHeader === `Bearer ${cronSecret}`;
-}
 
 export async function GET(request: NextRequest) {
   // Verify authorization
@@ -127,20 +115,7 @@ export async function GET(request: NextRequest) {
           for (const business of result.businesses) {
             if (!business.name) continue;
 
-            bizBuffer.push({
-              name: business.name,
-              address: business.address || null,
-              phone: business.phone || null,
-              rating: business.rating || null,
-              review_count: business.review_count || null,
-              category: business.category || null,
-              google_maps_url: business.google_maps_url || null,
-              has_website: business.has_website || false,
-              website_url: business.website_url || null,
-              website_score: business.website_score || null,
-              website_issues: business.website_issues || null,
-              location_query: business.location_query,
-            });
+            bizBuffer.push(businessToRow(business));
 
             if (bizBuffer.length >= 25) {
               const { error: insertError } = await supabase.from("businesses").upsert(bizBuffer, { onConflict: "name,address" });

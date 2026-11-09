@@ -28,6 +28,16 @@ export async function POST(request: NextRequest) {
       .eq("email", email.toLowerCase().trim())
       .single();
 
+    // PGRST116 = no row found (unknown email). Anything else means the database is unreachable
+    // (e.g. Supabase project paused) — don't disguise it as a wrong password.
+    if (error && error.code !== "PGRST116") {
+      console.error("Login database error:", error);
+      return NextResponse.json(
+        { error: "Database unreachable — is the Supabase project paused?" },
+        { status: 503 }
+      );
+    }
+
     if (error || !user) {
       return NextResponse.json(
         { error: "Invalid email or password" },

@@ -20,6 +20,7 @@ interface FilterPanelProps {
     minRating?: string;
     category?: string;
     hasWebsite?: string;
+    source?: string;
   };
   onFilterChange: (key: string, value: string) => void;
   onClearFilters: () => void;
@@ -40,7 +41,8 @@ export function FilterPanel({
     (filters.viable && filters.viable !== "not-red") ||
     filters.minRating ||
     filters.category ||
-    filters.hasWebsite;
+    filters.hasWebsite ||
+    filters.source;
 
   return (
     <div className="space-y-3">
@@ -135,6 +137,21 @@ export function FilterPanel({
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="no">No website</SelectItem>
             <SelectItem value="yes">Has website</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.source || ""}
+          onValueChange={(v) => onFilterChange("source", v)}
+        >
+          <SelectTrigger className="flex-1 basis-[calc(50%-0.25rem)] sm:flex-none sm:basis-auto sm:w-[150px]" aria-label="Source">
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            <SelectItem value="google_maps">Google Maps</SelectItem>
+            <SelectItem value="kbo">KBO (new businesses)</SelectItem>
+            <SelectItem value="kbo_call">KBO indépendants : à appeler</SelectItem>
           </SelectContent>
         </Select>
 

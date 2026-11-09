@@ -54,10 +54,24 @@ export function parseReviewCount(reviewStr: string | null | undefined): number |
   return isNaN(count) ? null : count;
 }
 
+/**
+ * Extract the municipality from a Belgian address.
+ * Google Maps formats: "Rue Neuve 12, 1000 Bruxelles" or "…, 1050 Ixelles, Belgique".
+ * Returns null rather than guessing (never returns a street).
+ */
 export function extractCity(address: string | null | undefined): string | null {
   if (!address) return null;
-  const parts = address.split(",").map((p) => p.trim());
-  return parts.length >= 2 ? parts[parts.length - 2] : parts[0] || null;
+  const parts = address
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p && !/^(belgique|belgium|belgië|belgie|belgien)$/i.test(p));
+
+  // Last part containing a 4-digit Belgian postcode followed by the municipality
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const match = parts[i].match(/(?:^|\s)\d{4}\s+([^\d,]+)$/);
+    if (match) return match[1].trim();
+  }
+  return null;
 }
 
 export function replaceTemplateVariables(

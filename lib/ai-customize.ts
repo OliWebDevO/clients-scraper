@@ -157,6 +157,54 @@ export async function customizeProposal(input: CustomizeProposalInput): Promise<
   return text.trim();
 }
 
+// --- Outreach email proofreading ---
+
+export interface EmailReview {
+  verdict: string;
+  problems: string[];
+  suggestions: string[];
+}
+
+const reviewSystemPrompt = `Tu es un relecteur exigeant d'emails de prospection B2B en français de Belgique.
+Un développeur web indépendant à Bruxelles écrit à une petite entreprise locale (commerce, restaurant, salon, artisan…) qu'il ne connaît pas.
+
+Vérifie et signale uniquement les vrais problèmes :
+- fautes d'orthographe, de grammaire, d'accents, de ponctuation (espaces avant : ; ? ! en français)
+- incohérences ou informations qui sonnent faux / génériques / automatisées
+- ton : vouvoiement, poli, chaleureux, ni insistant ni trop commercial
+- longueur : un premier contact doit faire moins de 150 mots, un seul appel à l'action clair
+- adéquation au secteur du destinataire
+- éléments qui risquent de déclencher les filtres anti-spam
+
+Réponds UNIQUEMENT en JSON : {"verdict": "Prêt à envoyer" | "À corriger", "problems": [..], "suggestions": [..]}
+Chaque élément : une phrase courte en français, en citant le passage concerné. Listes vides si rien à signaler.`;
+
+export async function reviewOutreachEmail(input: { subject: string; text: string; category: string | null }): Promise<EmailReview> {
+  const client = getOpenAIClient();
+  const response = await client.chat.completions.create({
+    model: AI_MODEL,
+    max_tokens: 800,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: reviewSystemPrompt },
+      {
+        role: "user",
+        content: `Secteur du destinataire : ${sanitizeAiInput(input.category) || "inconnu"}\n\nSujet : ${input.subject.slice(0, 300)}\n\n--- EMAIL ---\n${input.text.slice(0, 6000)}`,
+      },
+    ],
+  });
+
+  const raw = response.choices[0]?.message?.content;
+  if (!raw) throw new Error("No response from AI");
+  const parsed = JSON.parse(raw) as Partial<EmailReview>;
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 10) : []);
+  return {
+    verdict: typeof parsed.verdict === "string" ? parsed.verdict : "À corriger",
+    problems: list(parsed.problems),
+    suggestions: list(parsed.suggestions),
+  };
+}
+
 // --- Anthropic implementation (alternatif, pour plus tard) ---
 // export async function customizeCoverLetter(input: CustomizeInput): Promise<string> {
 //   const apiKey = process.env.ANTHROPIC_API_KEY;

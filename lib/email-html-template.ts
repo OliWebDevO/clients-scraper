@@ -1,14 +1,48 @@
-import { categoryToPhrase, cityToFrench, extractCity } from "./utils";
+import {
+  type ProspectData,
+  type WebsiteProfile,
+  getWebsiteProfile,
+  getPlatform,
+  getSectorPitch,
+  getCity,
+  cleanBusinessName,
+  plainIssues,
+  reputationPhrase,
+  formatRating,
+} from "./prospect";
+import { categoryToPhrase } from "./utils";
 
 const EMAIL_ASSETS_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets`;
 
-export interface HtmlEmailData {
-  businessName: string;
+export type HtmlEmailData = ProspectData;
+
+/** Map a businesses row to the data the email builders need */
+export function businessToEmailData(b: {
+  name: string;
   rating: number | null;
-  reviewCount: number | null;
+  review_count: number | null;
   category: string | null;
   address: string | null;
-  hasWebsite: boolean;
+  has_website: boolean;
+  website_url?: string | null;
+  website_score?: number | null;
+  website_issues?: string[] | null;
+  source?: string | null;
+  company_start_date?: string | null;
+}): HtmlEmailData {
+  return {
+    businessName: b.name,
+    rating: b.rating,
+    reviewCount: b.review_count,
+    category: b.category,
+    address: b.address,
+    hasWebsite: b.has_website,
+    websiteUrl: b.website_url ?? null,
+    websiteScore: b.website_score ?? null,
+    websiteIssues: b.website_issues ?? null,
+    source: b.source ?? null,
+    companyStartDate: b.company_start_date ?? null,
+  };
 }
 
 export interface HtmlEmailOverrides {
@@ -30,19 +64,49 @@ function boldify(escaped: string): string {
   return escaped.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight: 500; color: #ffffff;">$1</strong>');
 }
 
-/** Generate default text values from business data */
+/** Generate default text values from business data, tailored to its web presence and sector */
 export function generateDefaults(data: HtmlEmailData): Required<HtmlEmailOverrides> {
-  const { prefix, label } = categoryToPhrase(data.category);
-  const city = cityToFrench(extractCity(data.address));
+  const city = getCity(data.address);
+  const name = cleanBusinessName(data.businessName, city);
+  const profile = getWebsiteProfile(data);
+  const platform = getPlatform(data.websiteUrl)?.label;
+  const reputation = reputationPhrase(data.rating, data.reviewCount);
+  const { benefit } = getSectorPitch(data.category);
+  const issues = plainIssues(data.websiteIssues);
+
+  const headings: Record<WebsiteProfile, string> = {
+    none: "Un site web qui reflète la qualité de votre entreprise",
+    social: "Un site à votre nom, qui vous appartient",
+    booking: "Un site à votre nom, qui vous appartient",
+    outdated: "Un site moderne, à la hauteur de votre entreprise",
+    ok: "Un site moderne, à la hauteur de votre entreprise",
+  };
+  const observations: Record<WebsiteProfile, string> = {
+    none: `J'ai remarqué que **${name}** n'a pas encore de site web.`,
+    social: `J'ai remarqué que **${name}** est surtout présent via ${platform ?? "les réseaux sociaux"}.`,
+    booking: `J'ai remarqué que les réservations de **${name}** passent par ${platform ?? "une plateforme externe"}.`,
+    outdated: `J'ai jeté un œil au site de **${name}** et je pense qu'il pourrait vous rapporter bien plus.`,
+    ok: `J'ai jeté un œil au site de **${name}** et je pense qu'il pourrait vous rapporter bien plus.`,
+  };
+
+  const paragraphs: string[] = [];
+  if (reputation) {
+    paragraphs.push(
+      `Avec ${reputation}${city ? ` à **${city}**` : ""}, vous avez déjà la confiance de vos clients : ` +
+        `un site professionnel permettrait de transformer cette visibilité en nouveaux clients.`
+    );
+  }
+  if (issues.length) {
+    paragraphs.push(`En regardant votre site actuel, j'ai remarqué qu'${issues.join(", et qu'")}.`);
+  }
+  paragraphs.push(benefit);
+  paragraphs.push(`Je serais ravi d'en discuter autour d'un café ou lors d'un court appel téléphonique, sans engagement.`);
+  paragraphs.push(`Bien cordialement,`);
 
   return {
-    heroHeading: "Un site web qui reflète la qualité de votre entreprise",
-    heroSubtitle: `Bonjour, je suis développeur web à Bruxelles. J'ai remarqué que **${data.businessName}** pourrait bénéficier d'une présence en ligne moderne et performante.`,
-    personalMessage:
-      `Avec votre excellente réputation dans le domaine ${prefix} **${label}** à **${city}**, un site web professionnel vous permettrait de convertir cette visibilité en clients potentiels.\n\n` +
-      `Je peux également développer **une application sur mesure** pour simplifier votre gestion au quotidien : **comptabilité**, **planning du personnel** ou **suivi des stocks** ; le tout accessible depuis n'importe quel appareil.\n\n` +
-      `Je serais ravi d'en discuter autour d'un café ou lors d'un court appel téléphonique, sans engagement.\n\n` +
-      `Bien cordialement,`,
+    heroHeading: headings[profile],
+    heroSubtitle: `Bonjour, je suis développeur web à Bruxelles. ${observations[profile]}`,
+    personalMessage: paragraphs.join("\n\n"),
   };
 }
 
@@ -53,9 +117,18 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
   const personalMessage = overrides?.personalMessage || defaults.personalMessage;
 
   const safeName = esc(data.businessName);
-  const ratingStr = data.rating ? `${data.rating}/5` : "N/A";
-  const reviewStr = data.reviewCount?.toString() || "0";
-  const websiteStat = data.hasWebsite ? "Oui" : "0";
+  // Stats are only shown when they flatter the business (a 3.1/5 or "N/A" pill hurts the pitch)
+  const showStats = reputationPhrase(data.rating, data.reviewCount) !== null;
+  const ratingStr = data.rating != null ? `${formatRating(data.rating)}/5` : "";
+  const reviewStr = data.reviewCount?.toString() || "";
+  const websiteStats: Record<WebsiteProfile, string> = {
+    none: "Aucun",
+    social: "Réseaux",
+    booking: "Plateforme",
+    outdated: "À moderniser",
+    ok: "À moderniser",
+  };
+  const websiteStat = websiteStats[getWebsiteProfile(data)];
 
   // Build personal message paragraphs from double-newline separated text
   const paragraphs = personalMessage.split(/\n\n+/).filter(Boolean);
@@ -350,7 +423,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                         </tbody>
                     </table>
 
-                    <!-- Stats pills -->
+                    ${showStats ? `                    <!-- Stats pills -->
                     <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" class="dark-bg" style="background: #0d0b0e; background-color: #0d0b0e;">
                         <tbody>
                             <tr>
@@ -394,7 +467,7 @@ export function buildHtmlEmail(data: HtmlEmailData, overrides?: HtmlEmailOverrid
                                 </td>
                             </tr>
                         </tbody>
-                    </table>
+                    </table>` : ""}
 
                     <!-- Personal message -->
                     <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" class="dark-bg" style="background: #0d0b0e; background-color: #0d0b0e;">
@@ -558,84 +631,86 @@ export function generateFollowUpDefaults(
   variant: FollowUpVariant
 ): Required<FollowUpOverrides> {
   const { prefix, label } = categoryToPhrase(data.category);
-  const city = cityToFrench(extractCity(data.address));
+  const city = getCity(data.address);
+  const name = cleanBusinessName(data.businessName, city);
+  const where = `dans le domaine ${prefix} **${label}**${city ? ` à **${city}**` : ""}`;
 
   const subtitleMap: Record<FollowUpVariant, string> = {
-    site: `Site Web Professionnel pour ${data.businessName}`,
-    app: `Application de Gestion pour ${data.businessName}`,
-    both: `Site Web & Application pour ${data.businessName}`,
+    site: `Site web professionnel pour ${name}`,
+    app: `Application de gestion pour ${name}`,
+    both: `Site web & application pour ${name}`,
   };
 
   const contextSite =
-    `Suite a notre premier echange, je me permets de vous envoyer une proposition concrete pour la creation de votre site web professionnel.\n\n` +
-    `Avec votre reputation dans le domaine ${prefix} **${label}** a **${city}**, un site web vous permettrait de convertir votre visibilite en nouveaux clients.`;
+    `Suite à notre premier échange, je me permets de vous envoyer une proposition concrète pour la création de votre site web professionnel.\n\n` +
+    `Avec votre réputation ${where}, un site web vous permettrait de convertir votre visibilité en nouveaux clients.`;
 
   const contextApp =
-    `Suite a notre premier echange, je me permets de vous envoyer une proposition concrete pour le developpement de votre application de gestion.\n\n` +
-    `Pour une entreprise comme **${data.businessName}** dans le domaine ${prefix} **${label}** a **${city}**, une application sur mesure simplifierait considerablement votre quotidien.`;
+    `Suite à notre premier échange, je me permets de vous envoyer une proposition concrète pour le développement de votre application de gestion.\n\n` +
+    `Pour une entreprise comme **${name}** ${where}, une application sur mesure simplifierait considérablement votre quotidien.`;
 
   const contextBoth =
-    `Suite a notre premier echange, je me permets de vous envoyer une proposition concrete combinant un site web professionnel et une application de gestion.\n\n` +
-    `Pour **${data.businessName}** dans le domaine ${prefix} **${label}** a **${city}**, cette solution complete vous offrirait a la fois une vitrine en ligne performante et des outils de gestion au quotidien.`;
+    `Suite à notre premier échange, je me permets de vous envoyer une proposition concrète combinant un site web professionnel et une application de gestion.\n\n` +
+    `Pour **${name}** ${where}, cette solution complète vous offrirait à la fois une vitrine en ligne performante et des outils de gestion au quotidien.`;
 
   const offerSite =
     `**CE QUE COMPREND L'OFFRE SITE WEB**\n\n` +
-    `**Design & Developpement**\n` +
-    `- Design moderne et personnalise a votre image\n` +
-    `- Site responsive (mobile, tablette, desktop)\n` +
-    `- Formulaire de contact integre\n` +
-    `- Integration Google Maps pour votre localisation\n` +
-    `- Optimisation SEO pour etre visible sur Google\n\n` +
-    `**Hebergement & Maintenance**\n` +
+    `**Design & développement**\n` +
+    `- Design moderne et personnalisé à votre image\n` +
+    `- Site responsive (mobile, tablette, ordinateur)\n` +
+    `- Formulaire de contact intégré\n` +
+    `- Intégration Google Maps pour votre localisation\n` +
+    `- Optimisation SEO pour être visible sur Google\n\n` +
+    `**Hébergement & maintenance**\n` +
     `- Mise en ligne et configuration du nom de domaine\n` +
-    `- Hebergement performant inclus la premiere annee\n` +
-    `- Support technique apres livraison`;
+    `- Hébergement performant inclus la première année\n` +
+    `- Support technique après la livraison`;
 
   const offerApp =
     `**CE QUE COMPREND L'OFFRE APPLICATION**\n\n` +
-    `**Fonctionnalites Principales**\n` +
-    `- Gestion de la comptabilite (factures, depenses, revenus)\n` +
+    `**Fonctionnalités principales**\n` +
+    `- Gestion de la comptabilité (factures, dépenses, revenus)\n` +
     `- Planning et gestion du personnel\n` +
-    `- Suivi des stocks et alertes de reapprovisionnement\n` +
-    `- Accessible depuis n'importe quel appareil (PC, mobile, tablette)\n\n` +
-    `**Technique & Support**\n` +
-    `- Interface intuitive et facile a prendre en main\n` +
-    `- Donnees securisees et sauvegardees\n` +
-    `- Support technique et formations incluses`;
+    `- Suivi des stocks et alertes de réapprovisionnement\n` +
+    `- Accessible depuis n'importe quel appareil (ordinateur, mobile, tablette)\n\n` +
+    `**Technique & support**\n` +
+    `- Interface intuitive et facile à prendre en main\n` +
+    `- Données sécurisées et sauvegardées\n` +
+    `- Support technique et formation inclus`;
 
   const approachSection =
     `**MON APPROCHE**\n\n` +
-    `- **Etape 1** — Discussion approfondie de vos besoins et objectifs\n` +
-    `- **Etape 2** — Proposition de maquettes et validation ensemble\n` +
-    `- **Etape 3** — Developpement avec points d'avancement reguliers\n` +
-    `- **Etape 4** — Livraison, formation et mise en ligne`;
+    `- **Étape 1** — Discussion approfondie de vos besoins et objectifs\n` +
+    `- **Étape 2** — Proposition de maquettes et validation ensemble\n` +
+    `- **Étape 3** — Développement avec des points d'avancement réguliers\n` +
+    `- **Étape 4** — Livraison, formation et mise en ligne`;
 
   const pricingMap: Record<FollowUpVariant, string> = {
     site:
       `**TARIFICATION**\n\n` +
-      `Pour un site web professionnel, le budget se situe generalement entre **800 et 1500 euros**, selon la complexite et le nombre de pages.\n\n` +
-      `Un devis detaille et personnalise vous sera remis apres notre echange.`,
+      `Pour un site web professionnel, le budget se situe généralement entre **800 et 1500 euros**, selon la complexité et le nombre de pages.\n\n` +
+      `Un devis détaillé et personnalisé vous sera remis après notre échange.`,
     app:
       `**TARIFICATION**\n\n` +
-      `Pour une application de gestion sur mesure, le budget se situe generalement entre **1500 et 3000 euros**, selon les fonctionnalites souhaitees.\n\n` +
-      `Un devis detaille et personnalise vous sera remis apres notre echange.`,
+      `Pour une application de gestion sur mesure, le budget se situe généralement entre **1500 et 3000 euros**, selon les fonctionnalités souhaitées.\n\n` +
+      `Un devis détaillé et personnalisé vous sera remis après notre échange.`,
     both:
       `**TARIFICATION**\n\n` +
-      `Pour l'ensemble site web + application de gestion, le budget se situe generalement entre **2000 et 4000 euros**, avec une remise pour le package complet.\n\n` +
-      `Un devis detaille et personnalise vous sera remis apres notre echange.`,
+      `Pour l'ensemble site web + application de gestion, le budget se situe généralement entre **2000 et 4000 euros**, avec une remise pour le package complet.\n\n` +
+      `Un devis détaillé et personnalisé vous sera remis après notre échange.`,
   };
 
   const whyMe =
     `**POURQUOI TRAVAILLER AVEC MOI**\n\n` +
-    `- Developpeur independant base a Bruxelles — interlocuteur unique\n` +
+    `- Développeur indépendant basé à Bruxelles — un interlocuteur unique\n` +
     `- Communication directe et transparente tout au long du projet\n` +
     `- Technologies modernes pour des performances optimales\n` +
-    `- Suivi et support apres la livraison`;
+    `- Suivi et support après la livraison`;
 
   const nextStep =
-    `**PROCHAINE ETAPE**\n\n` +
-    `Je vous propose un appel de 15-20 minutes ou un cafe pour discuter de vos besoins concrets et repondre a toutes vos questions, sans engagement.\n\n` +
-    `N'hesitez pas a me recontacter par email ou par telephone.\n\n` +
+    `**PROCHAINE ÉTAPE**\n\n` +
+    `Je vous propose un appel de 15-20 minutes ou un café pour discuter de vos besoins concrets et répondre à toutes vos questions, sans engagement.\n\n` +
+    `N'hésitez pas à me recontacter par email ou par téléphone.\n\n` +
     `Bien cordialement,`;
 
   const contextMap: Record<FollowUpVariant, string> = {

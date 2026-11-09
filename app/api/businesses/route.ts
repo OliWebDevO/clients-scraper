@@ -10,7 +10,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { id, investigated, viable } = body;
+    const { id, investigated, viable, do_not_contact, replied } = body;
 
     if (!id || typeof id !== "string") {
       return NextResponse.json(
@@ -26,6 +26,12 @@ export async function PATCH(request: NextRequest) {
     }
     if (viable === null || typeof viable === "boolean") {
       updates.viable = viable;
+    }
+    if (typeof do_not_contact === "boolean") {
+      updates.do_not_contact = do_not_contact;
+    }
+    if (typeof replied === "boolean") {
+      updates.replied = replied;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -46,6 +52,13 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       throw error;
+    }
+
+    // Opt-outs are also kept by email address, so a re-scraped duplicate stays blocked
+    if (do_not_contact === true && data?.email) {
+      await supabase
+        .from("email_optouts")
+        .upsert({ email: String(data.email).toLowerCase(), reason: "manual" }, { onConflict: "email" });
     }
 
     return NextResponse.json({ success: true, data });

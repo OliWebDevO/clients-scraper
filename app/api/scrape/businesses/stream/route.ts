@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
-import { scrapeGoogleMapsWithProgress } from "@/lib/scrapers/google-maps-stream";
+import { scrapeGoogleMapsWithProgress, businessToRow } from "@/lib/scrapers/google-maps-stream";
 import { isRateLimited, getClientIdentifier } from "@/lib/rate-limit";
 
 export const maxDuration = 300; // 5 minutes max
@@ -113,29 +113,18 @@ export async function POST(request: NextRequest) {
         sendEvent("status", { message: "Sauvegarde des résultats...", progress: 95 });
 
         let insertedCount = 0;
+        let saveError: string | null = null;
         const buffer: Record<string, unknown>[] = [];
 
         for (const business of result.businesses) {
           if (!business.name) continue;
 
-          buffer.push({
-            name: business.name,
-            address: business.address || null,
-            phone: business.phone || null,
-            rating: business.rating || null,
-            review_count: business.review_count || null,
-            category: business.category || null,
-            google_maps_url: business.google_maps_url || null,
-            has_website: business.has_website || false,
-            website_url: business.website_url || null,
-            website_score: business.website_score || null,
-            website_issues: business.website_issues || null,
-            location_query: business.location_query || location,
-          });
+          buffer.push(businessToRow(business, location));
 
           if (buffer.length >= 25) {
             const { error } = await supabase.from("businesses").upsert(buffer, { onConflict: "name,address" });
             if (!error) insertedCount += buffer.length;
+            else saveError ??= error.message;
             buffer.length = 0;
           }
         }
@@ -143,6 +132,22 @@ export async function POST(request: NextRequest) {
         if (buffer.length > 0) {
           const { error } = await supabase.from("businesses").upsert(buffer, { onConflict: "name,address" });
           if (!error) insertedCount += buffer.length;
+          else saveError ??= error.message;
+        }
+
+        // Saving failed (e.g. migration not run): say so instead of reporting "0 found"
+        if (saveError) {
+          console.error("Business save error:", saveError);
+          if (log) {
+            await supabase
+              .from("scrape_logs")
+              .update({ status: "failed", error_message: saveError, completed_at: new Date().toISOString() })
+              .eq("id", log.id);
+          }
+          sendEvent("error", {
+            message: `${result.businesses.length} trouvés mais non enregistrés : ${saveError}. As-tu lancé doc/migration-prospecting.sql ?`,
+          });
+          return;
         }
 
         // Update scrape log
