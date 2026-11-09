@@ -6,8 +6,8 @@ const hits = new Map<string, { count: number; resetAt: number }>();
 export function getClientIdentifier(request: { headers: { get(name: string): string | null } }): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    // x-forwarded-for can contain multiple IPs; the first is the client
-    return forwarded.split(",")[0].trim();
+    // The first entries are sent by the client and can be spoofed; the last one is appended by nginx
+    return forwarded.split(",").at(-1)!.trim();
   }
   return request.headers.get("x-real-ip") || "unknown";
 }

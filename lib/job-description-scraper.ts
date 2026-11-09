@@ -1,3 +1,5 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import * as cheerio from "cheerio";
 import { randomDelay } from "@/lib/scrapers/base";
 
@@ -19,6 +21,33 @@ const GENERIC_SELECTORS = [
   '[role="main"]',
 ];
 
+/** Loopback, private, link-local, CGNAT and unspecified addresses (IPv4 and IPv6) */
+function isPrivateIp(ip: string): boolean {
+  if (isIP(ip) === 6) {
+    const v6 = ip.toLowerCase();
+    if (v6.startsWith("::ffff:") && isIP(v6.slice(7)) === 4) return isPrivateIp(v6.slice(7));
+    return v6 === "::" || v6 === "::1" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+  }
+  const [a, b] = ip.split(".").map(Number);
+  return (
+    a === 0 || a === 10 || a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
+/** SSRF: a public-looking hostname can still resolve to the VPS itself (127.0.0.1) or a private network */
+export async function resolvesToPublicIp(url: string): Promise<boolean> {
+  try {
+    const addresses = await lookup(new URL(url).hostname, { all: true });
+    return addresses.length > 0 && addresses.every((a) => !isPrivateIp(a.address));
+  } catch {
+    return false;
+  }
+}
+
 export function isAllowedUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -26,6 +55,7 @@ export function isAllowedUrl(url: string): boolean {
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
     // Block private/internal IPs and hostnames
     const hostname = parsed.hostname;
+    if (isIP(hostname) === 4 && isPrivateIp(hostname)) return false;
 
     // Block IPv6 loopback and any hostname containing colons (IPv6 literals)
     if (hostname === "::1" || hostname === "[::1]" || hostname.includes(":")) return false;
@@ -95,6 +125,9 @@ async function scrapeWithFetch(url: string): Promise<string> {
   let currentUrl = url;
 
   for (let i = 0; i <= MAX_REDIRECTS; i++) {
+    if (!(await resolvesToPublicIp(currentUrl))) {
+      throw new Error("URL not allowed: resolves to a private address");
+    }
     const response = await fetch(currentUrl, {
       headers: {
         "User-Agent":
@@ -226,7 +259,7 @@ function cleanText(text: string): string {
 }
 
 export async function scrapeJobDescription(url: string): Promise<string> {
-  if (!isAllowedUrl(url)) {
+  if (!isAllowedUrl(url) || !(await resolvesToPublicIp(url))) {
     throw new Error("URL not allowed: only public http/https URLs are permitted");
   }
 

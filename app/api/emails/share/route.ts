@@ -6,6 +6,7 @@ import {
 } from "@/lib/email-html-template";
 
 export async function POST(request: Request) {
+  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
   try {
     const body = await request.json().catch(() => ({}));
     const businessName = body.businessName || "proposition";
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     const html = buildHtmlEmail(genericData, genericOverrides);
 
     // Generate PDF with puppeteer
-    const browser = await puppeteer.launch({ headless: true });
+    browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
     await page.setViewport({ width: 700, height: 800 });
     await page.setContent(html, { waitUntil: "networkidle0" });
@@ -88,8 +89,6 @@ export async function POST(request: Request) {
       pageRanges: "1",
     });
 
-    await browser.close();
-
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
@@ -102,5 +101,8 @@ export async function POST(request: Request) {
       { success: false, error: "An internal error occurred" },
       { status: 500 }
     );
+  } finally {
+    // Never leave a Chromium process running on the VPS when the PDF generation fails
+    await browser?.close();
   }
 }

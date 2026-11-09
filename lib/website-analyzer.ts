@@ -5,7 +5,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { isAllowedUrl } from "@/lib/job-description-scraper";
+import { isAllowedUrl, resolvesToPublicIp } from "@/lib/job-description-scraper";
 
 export interface WebsiteAnalysis {
   url: string;
@@ -134,6 +134,9 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
     ): Promise<Response> {
       let currentUrl = url;
       for (let i = 0; i <= MAX_REDIRECTS; i++) {
+        if (!(await resolvesToPublicIp(currentUrl))) {
+          throw new Error("URL resolves to a private address");
+        }
         const res = await fetch(currentUrl, { ...options, redirect: "manual" });
         if (res.status >= 300 && res.status < 400) {
           const location = res.headers.get("location");

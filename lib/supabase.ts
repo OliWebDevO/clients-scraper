@@ -3,9 +3,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Client-side Supabase client (untyped for flexibility)
+// Client-side Supabase client (untyped for flexibility).
+// In the browser it reads through the session-protected proxy app/api/db/rest/v1/[table]/route.ts,
+// so the anon key has no access to the data (doc/migration-security.sql)
+const browserDbUrl = typeof window === "undefined" ? supabaseUrl : `${window.location.origin}/api/db`;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const supabase: SupabaseClient<any, "public", any> = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase: SupabaseClient<any, "public", any> = createClient(browserDbUrl, supabaseAnonKey);
 
 // Server-side Supabase client with service role (for API routes)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
