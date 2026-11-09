@@ -40,7 +40,7 @@ export function DailyOutreachCard() {
         setReview(d.review_before_send !== false);
         setLastRun(
           d.last_run_date && d.last_result
-            ? `${d.last_run_date} : ${d.last_result.kbo} KBO, ${d.last_result.google} Google${d.last_result.skipped ? `, ${d.last_result.skipped} ignorés` : ""}`
+            ? `${d.last_run_date} : ${d.last_result.kbo} KBO, ${d.last_result.google} Google${d.last_result.queued ? `, ${d.last_result.queued} mis dans « À valider »` : ""}${d.last_result.skipped ? `, ${d.last_result.skipped} ignorés` : ""}`
             : null
         );
         setPreview(result.preview);
@@ -75,7 +75,7 @@ export function DailyOutreachCard() {
           ? "Envoi quotidien désactivé"
           : nextReview
             ? `Chaque jour à ${hour}h, les mails sont préparés dans « À valider »`
-            : `Envoi direct chaque jour à ${hour}h`,
+            : `Chaque jour à ${hour}h : correction par l'IA puis envoi direct`,
       });
       load();
     } catch (err) {
@@ -110,7 +110,7 @@ export function DailyOutreachCard() {
               </div>
               <div className="flex items-center gap-3">
                 <Switch id="daily-review" checked={review} onCheckedChange={(v) => save(enabled, v)} disabled={saving} />
-                <Label htmlFor="daily-review">{review ? "Valider chaque mail avant envoi" : "Envoi direct, sans validation"}</Label>
+                <Label htmlFor="daily-review">{review ? "Je valide chaque mail avant envoi" : "Correction par l'IA puis envoi direct"}</Label>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="daily-hour">Heure</Label>

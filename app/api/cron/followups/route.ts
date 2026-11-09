@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { verifyCronSecret } from "@/lib/cron-auth";
-import { sendEmail } from "@/lib/resend";
 import { checkEmail } from "@/lib/email-checks";
-import { SENDER } from "@/lib/prospect";
+import { cleanBusinessName, getCity } from "@/lib/prospect";
 import {
   DEFAULT_FOLLOWUP_SETTINGS,
   generateFollowUpEmail,
   isBrusselsWorkingHour,
-  plainEmailToHtml,
   type FollowUpSettings,
 } from "@/lib/outreach";
-import { queueEmail, queuedBusinessIds } from "@/lib/outreach-queue";
+import { queueEmail, queuedBusinessIds, autoCorrectAndSend } from "@/lib/outreach-queue";
 import { DEFAULT_DAILY_SETTINGS, type DailyOutreachSettings } from "@/lib/daily-outreach";
 
 export const maxDuration = 300;
@@ -114,25 +112,21 @@ export async function GET(request: NextRequest) {
       }
       continue;
     }
+    // Direct mode: AI corrects the phrasing, then it is sent (doubtful ones go to "À valider")
     if (results.some((r) => r.status === "sent")) await new Promise((r) => setTimeout(r, GAP_MS));
     try {
-      const sent = await sendEmail({
-        to: first.recipient_email,
-        subject,
-        html: plainEmailToHtml(body),
-        text: body,
-        headers: { "List-Unsubscribe": `<mailto:${SENDER.email}?subject=stop>` },
-      });
-      await supabase.from("sent_emails").insert({
-        business_id: businessId,
-        recipient_email: first.recipient_email,
+      const outcome = await autoCorrectAndSend(supabase, {
+        businessId,
+        recipientEmail: first.recipient_email,
         subject,
         body,
-        status: "sent",
         kind: "followup",
-        resend_id: sent?.id || null,
+        businessName: business.name,
+        displayName: cleanBusinessName(business.name, getCity(business.address)),
+        location: business.address,
+        lockSubject: true,
       });
-      results.push({ business: business.name, status: "sent" });
+      results.push({ business: business.name, status: outcome === "sent" ? "sent" : "queued" });
     } catch (err) {
       console.error(`Follow-up failed for ${business.name}:`, err);
       results.push({ business: business.name, status: "failed" });

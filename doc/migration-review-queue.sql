@@ -25,7 +25,8 @@ CREATE INDEX IF NOT EXISTS idx_outreach_queue_business ON outreach_queue(busines
 ALTER TABLE outreach_queue ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON outreach_queue FROM anon, authenticated;
 
--- Review mode is ON by default: nothing automatic leaves without your approval
+-- Oliver's choice: automatic emails are corrected by the AI, then sent directly
+-- (doubtful ones still land on the "À valider" page). Switch in Settings to validate by hand.
 UPDATE settings
-SET value = value || '{"review_before_send": true}'::jsonb
+SET value = value || '{"review_before_send": false}'::jsonb
 WHERE key = 'daily_outreach' AND NOT (value ? 'review_before_send');

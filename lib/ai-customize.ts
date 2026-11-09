@@ -208,6 +208,66 @@ export async function reviewOutreachEmail(input: { subject: string; text: string
   };
 }
 
+// --- Outreach email auto-correction (phrasing only, then sent without human review) ---
+
+export interface EmailCorrection {
+  subject: string;
+  body: string;
+  changes: string[]; // what was corrected, for the log
+  blocking: string | null; // a problem a human must look at (wrong language, doubtful claim…)
+}
+
+const correctionSystemPrompt = `Tu es correcteur d'emails de prospection B2B en français de Belgique, écrits par un développeur web indépendant à Bruxelles.
+
+Tu reçois le SUJET et le CORPS d'un email (sans la signature). Corrige UNIQUEMENT :
+- l'orthographe, la grammaire, les accents, la ponctuation (espaces avant : ; ? ! en français)
+- les mots en trop ou manquants (« en ouvrant le site, et j'ai remarqué » → « en ouvrant le site, j'ai remarqué »)
+- les phrases lourdes ou ambiguës : reformule au minimum pour qu'elles se lisent naturellement
+
+Règles strictes :
+- ne change AUCUN fait : garde tels quels les chiffres, notes, nombres d'avis, noms d'entreprise, noms de domaine, villes
+- n'ajoute JAMAIS d'article devant un nom d'entreprise (« de Haarhuis Happaerts » reste tel quel) : les articles nécessaires sont déjà en place
+- n'ajoute ni promesse, ni prix, ni information ; ne supprime aucune phrase ; garde le vouvoiement, le ton et la longueur
+- garde les paragraphes (séparés par une ligne vide) dans le même ordre
+- si le texte est déjà correct, renvoie-le à l'identique avec "changes": []
+- "blocking" : une phrase courte UNIQUEMENT si un humain doit relire (ex. la commune est en Flandre alors que l'email est en français, ou une affirmation semble fausse) ; sinon null
+
+Réponds UNIQUEMENT en JSON : {"subject": "...", "body": "...", "changes": ["correction 1", ...], "blocking": null}`;
+
+export async function correctOutreachEmail(input: {
+  subject: string;
+  body: string;
+  category: string | null;
+  location: string | null;
+}): Promise<EmailCorrection> {
+  const client = getOpenAIClient();
+  const response = await client.chat.completions.create({
+    model: AI_MODEL,
+    max_tokens: 1500,
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: correctionSystemPrompt },
+      {
+        role: "user",
+        content:
+          `Secteur : ${sanitizeAiInput(input.category) || "inconnu"}\nAdresse : ${sanitizeAiInput(input.location) || "inconnue"}\n\n` +
+          `SUJET : ${input.subject.slice(0, 300)}\n\n--- CORPS ---\n${input.body.slice(0, 6000)}`,
+      },
+    ],
+  });
+  const raw = response.choices[0]?.message?.content;
+  if (!raw) throw new Error("No response from AI");
+  const parsed = JSON.parse(raw) as Partial<EmailCorrection>;
+  if (typeof parsed.subject !== "string" || typeof parsed.body !== "string") throw new Error("Malformed AI correction");
+  return {
+    subject: parsed.subject.trim(),
+    body: parsed.body.trim(),
+    changes: Array.isArray(parsed.changes) ? parsed.changes.filter((c): c is string => typeof c === "string").slice(0, 10) : [],
+    blocking: typeof parsed.blocking === "string" && parsed.blocking.trim() ? parsed.blocking.trim() : null,
+  };
+}
+
 // --- Anthropic implementation (alternatif, pour plus tard) ---
 // export async function customizeCoverLetter(input: CustomizeInput): Promise<string> {
 //   const apiKey = process.env.ANTHROPIC_API_KEY;

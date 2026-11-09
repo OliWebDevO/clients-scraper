@@ -4,7 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkEmail, type EmailCheckResult } from "./email-checks";
-import { reviewOutreachEmail, type EmailReview } from "./ai-customize";
+import { reviewOutreachEmail, correctOutreachEmail, type EmailReview } from "./ai-customize";
 import { sendEmail } from "./resend";
 import { plainEmailToHtml } from "./outreach";
 import { SENDER } from "./prospect";
@@ -53,6 +53,147 @@ export async function reviewDraft(input: {
     console.warn("AI review unavailable:", err);
   }
   return { checks, ai_review };
+}
+
+/* ── Automatic AI correction, then direct send ── */
+
+const SIGNATURE_START = "\n\nBien cordialement";
+
+/** The AI only sees the message itself: signature (and quoted first email) are never touched */
+function splitBody(body: string): { content: string; tail: string } {
+  const i = body.indexOf(SIGNATURE_START);
+  return i === -1 ? { content: body, tail: "" } : { content: body.slice(0, i), tail: body.slice(i) };
+}
+
+const numbers = (s: string) => (s.match(/\d+(?:[.,]\d+)?/g) || []).sort().join("|");
+const domains = (s: string) =>
+  (s.toLowerCase().match(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:be|com|fr|eu|net|org|nl|lu|info|brussels|shop|io|co)\b/g) || []).sort().join("|");
+const paragraphs = (s: string) => s.trim().split(/\n\s*\n/).length;
+
+/** Reject a correction that changed facts, dropped the name or rewrote too much */
+export function correctionIsSafe(
+  original: { subject: string; content: string },
+  corrected: { subject: string; content: string },
+  businessName?: string
+): string | null {
+  if (numbers(original.content) !== numbers(corrected.content) || numbers(original.subject) !== numbers(corrected.subject)) {
+    return "l'IA a modifié un chiffre";
+  }
+  if (domains(original.content + original.subject) !== domains(corrected.content + corrected.subject)) {
+    return "l'IA a modifié un nom de domaine";
+  }
+  if (businessName) {
+    const name = businessName.toLowerCase();
+    for (const part of ["subject", "content"] as const) {
+      if (original[part].toLowerCase().includes(name) && !corrected[part].toLowerCase().includes(name)) {
+        return "l'IA a retiré le nom de l'entreprise";
+      }
+    }
+  }
+  if (businessName) {
+    const escaped = businessName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const withArticle = new RegExp(`\\b(?:la|le|les|du|des)\\s+${escaped}|\\bl['’]${escaped}`, "gi");
+    const count = (s: string) => (s.match(withArticle) || []).length;
+    if (count(corrected.content + corrected.subject) > count(original.content + original.subject)) {
+      return "l'IA a ajouté un article devant le nom de l'entreprise";
+    }
+  }
+  if (paragraphs(original.content) !== paragraphs(corrected.content)) return "l'IA a changé la structure des paragraphes";
+  const ratio = corrected.content.length / Math.max(1, original.content.length);
+  if (ratio < 0.8 || ratio > 1.25) return "l'IA a trop réécrit le texte";
+  if (!corrected.subject || corrected.subject.length > 90) return "sujet corrigé invalide";
+  return null;
+}
+
+/**
+ * Direct mode: the AI corrects the phrasing, the result is checked, then sent.
+ * Anything doubtful (AI unavailable, blocking remark, unsafe correction, failed checks)
+ * goes to the "À valider" page instead of being sent.
+ */
+export async function autoCorrectAndSend(
+  supabase: SupabaseClient,
+  draft: {
+    businessId: string;
+    recipientEmail: string;
+    subject: string;
+    body: string;
+    kind: "first" | "followup";
+    businessName?: string;
+    displayName?: string; // name as written in the email (cleaned), for the safety check
+    category?: string | null;
+    location?: string | null;
+    lockSubject?: boolean; // follow-ups keep "Re: …" so they land in the same thread
+  }
+): Promise<"sent" | "queued"> {
+  const { content, tail } = splitBody(draft.body);
+  let reason: string | null = null;
+  let subject = draft.subject;
+  let body = draft.body;
+  let changes: string[] = [];
+  let verdict = "Aucune correction nécessaire";
+
+  try {
+    const fix = await correctOutreachEmail({ subject: draft.subject, body: content, category: draft.category ?? null, location: draft.location ?? null });
+    if (fix.blocking) {
+      reason = fix.blocking; // a real problem: a human must look at it
+    } else {
+      const unsafe = correctionIsSafe({ subject: draft.subject, content }, { subject: fix.subject, content: fix.body }, draft.displayName);
+      if (unsafe) {
+        // The template text already passed every check: send it rather than a risky rewrite
+        verdict = `Correction IA refusée (${unsafe}) : texte d'origine envoyé`;
+      } else {
+        subject = draft.lockSubject ? draft.subject : fix.subject;
+        body = fix.body + tail;
+        changes = fix.changes;
+        if (changes.length) verdict = "Corrigé automatiquement";
+      }
+    }
+  } catch (err) {
+    console.warn("AI correction unavailable:", err);
+    reason = "correction IA indisponible";
+  }
+
+  const checks = checkEmail({ subject, text: body, recipientEmail: draft.recipientEmail, businessName: draft.businessName });
+  if (!reason && checks.errors.length) reason = `vérifications : ${checks.errors.join(" ")}`;
+
+  const base = {
+    business_id: draft.businessId,
+    recipient_email: draft.recipientEmail,
+    subject,
+    body,
+    kind: draft.kind,
+    checks,
+  };
+
+  if (reason) {
+    // Not sent: waits for a human on the "À valider" page, with the reason
+    const { error } = await supabase.from("outreach_queue").insert({
+      ...base,
+      subject: draft.subject,
+      body: draft.body,
+      status: "pending",
+      error_message: `Non envoyé automatiquement : ${reason}`,
+    });
+    if (error) throw new Error(`Queue insert failed: ${error.message}`);
+    return "queued";
+  }
+
+  const { data: row, error } = await supabase
+    .from("outreach_queue")
+    .insert({
+      ...base,
+      status: "approved",
+      ai_review: {
+        verdict,
+        problems: changes,
+        suggestions: [],
+      },
+    })
+    .select("id, business_id, recipient_email, subject, body, kind, status, checks, ai_review, error_message, created_at, sent_at")
+    .single();
+  if (error || !row) throw new Error(`Queue insert failed: ${error?.message}`);
+  const outcome = await sendQueued(supabase, row as QueueRow);
+  return outcome === "sent" ? "sent" : "queued";
 }
 
 export async function queueEmail(

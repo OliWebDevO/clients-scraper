@@ -16,7 +16,7 @@ export interface DailyOutreachSettings {
   google_count: number;
   review_before_send?: boolean; // default true: emails wait on the "À valider" page
   last_run_date?: string; // YYYY-MM-DD, Brussels
-  last_result?: { kbo: number; google: number; skipped: number };
+  last_result?: { kbo: number; google: number; skipped: number; queued?: number };
 }
 
 export const DEFAULT_DAILY_SETTINGS: DailyOutreachSettings = { enabled: false, hour: 8, kbo_count: 15, google_count: 5, review_before_send: true };

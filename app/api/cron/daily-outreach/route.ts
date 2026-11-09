@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { verifyCronSecret } from "@/lib/cron-auth";
-import { sendEmail } from "@/lib/resend";
 import { checkEmail } from "@/lib/email-checks";
 import { businessToEmailData } from "@/lib/email-html-template";
-import { generateFirstContactEmail, SENDER } from "@/lib/prospect";
-import { plainEmailToHtml } from "@/lib/outreach";
-import { queueEmail } from "@/lib/outreach-queue";
+import { generateFirstContactEmail, cleanBusinessName, getCity } from "@/lib/prospect";
+import { queueEmail, autoCorrectAndSend } from "@/lib/outreach-queue";
 import {
   DEFAULT_DAILY_SETTINGS,
   brusselsDate,
@@ -44,7 +42,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   const review = config.review_before_send !== false;
-  const result = { kbo: 0, google: 0, skipped: 0 };
+  const result = { kbo: 0, google: 0, skipped: 0, queued: 0 };
   let first = true;
   const send = async (b: Candidate, bucket: "kbo" | "google") => {
     const { subject, body } = generateFirstContactEmail(businessToEmailData(b));
@@ -74,26 +72,23 @@ export async function GET(request: NextRequest) {
       }
       return;
     }
+    // Direct mode: AI corrects the phrasing, then it is sent (doubtful ones go to "À valider")
     if (!first) await new Promise((r) => setTimeout(r, GAP_MS));
     first = false;
     try {
-      const sent = await sendEmail({
-        to: b.email!,
-        subject,
-        html: plainEmailToHtml(body),
-        text: body,
-        headers: { "List-Unsubscribe": `<mailto:${SENDER.email}?subject=stop>` },
-      });
-      await supabase.from("sent_emails").insert({
-        business_id: b.id,
-        recipient_email: b.email,
+      const outcome = await autoCorrectAndSend(supabase, {
+        businessId: b.id,
+        recipientEmail: b.email!,
         subject,
         body,
-        status: "sent",
         kind: "first",
-        resend_id: sent?.id || null,
+        businessName: b.name,
+        displayName: cleanBusinessName(b.name, getCity(b.address)),
+        category: b.category,
+        location: b.address,
       });
-      result[bucket]++;
+      if (outcome === "sent") result[bucket]++;
+      else result.queued++;
     } catch (err) {
       console.error(`Daily outreach failed for ${b.name}:`, err);
       result.skipped++;
@@ -108,5 +103,5 @@ export async function GET(request: NextRequest) {
     .update({ value: { ...config, last_run_date: day, last_result: result } })
     .eq("key", "daily_outreach");
 
-  return NextResponse.json({ success: true, mode: review ? "queued for review" : "sent", ...result });
+  return NextResponse.json({ success: true, mode: review ? "queued for review" : "AI-corrected and sent", ...result });
 }
