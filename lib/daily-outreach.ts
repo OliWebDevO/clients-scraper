@@ -42,16 +42,26 @@ export interface Candidate {
 const KBO_MAX_AGE_DAYS = 365; // "félicitations pour le lancement" stays true for a year
 const EMAIL_LOOKUPS_PER_RUN = 15;
 
-/** Email on the business' own website domain (info@salon.be), not a personal mailbox */
-export function isOwnDomainEmail(email: string, websiteUrl: string | null): boolean {
-  if (!websiteUrl) return false;
-  try {
-    const host = new URL(websiteUrl).hostname.replace(/^www\./, "").toLowerCase();
-    const domain = email.split("@")[1]?.toLowerCase() ?? "";
-    return domain === host || domain.endsWith(`.${host}`) || host.endsWith(`.${domain}`);
-  } catch {
-    return false;
-  }
+const FREE_MAILBOX = /^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|icloud|me|aol|gmx|proton|protonmail|skynet|telenet|proximus|scarlet|voo|orange)\./i;
+
+const normalize = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Impersonal business address, the only kind that may be emailed without prior consent:
+ * - any address on a business domain (info@salon.be, contact@mylittlecupcoffee.com), or
+ * - a free mailbox that carries the business' name (friteriechezloris@hotmail.com),
+ *   not a manager's personal one (xavierdenonville@hotmail.com)
+ */
+export function isBusinessAddress(email: string, businessName: string): boolean {
+  const [local = "", domain = ""] = email.toLowerCase().split("@");
+  if (!FREE_MAILBOX.test(domain)) return true;
+  const localNorm = normalize(local);
+  const tokens = businessName
+    .split(/[\s'’«»"&,.\-/()]+/)
+    .map(normalize)
+    .filter((t) => t.length >= 5 && !["srl", "sprl", "asbl", "societe", "entreprise", "generale", "services"].includes(t));
+  return tokens.some((t) => localNorm.includes(t));
 }
 
 export function brusselsDate(date = new Date()): { day: string; hour: number } {
@@ -119,6 +129,7 @@ export async function selectKboCandidates(supabase: SupabaseClient, limit: numbe
   const { contacted, optedOut } = await excludedIds(supabase);
   return ((data || []) as Candidate[])
     .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()))
+    .filter((b) => isBusinessAddress(b.email!, b.name))
     .slice(0, limit);
 }
 
@@ -170,7 +181,7 @@ export async function selectGoogleCandidates(
       }
     }
     if (!b.email || optedOut.has(b.email.toLowerCase())) continue;
-    if (!isOwnDomainEmail(b.email, b.website_url)) continue; // generic business address only
+    if (!isBusinessAddress(b.email, b.name)) continue; // impersonal business address only
     picked.push(b);
   }
   return picked;

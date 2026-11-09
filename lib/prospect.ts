@@ -198,12 +198,25 @@ export function reputationPhrase(rating: number | null, reviewCount: number | nu
 /* ── Name & city helpers ── */
 
 /** Remove Google Maps suffixes like "Chez Marco - Ixelles" or "Salon X | Coiffeur Bruxelles" */
+/** "FRITERIE « CHEZ LORIS »" → "Friterie « Chez Loris »"; short words (GA, ATZ, R.E.) stay as acronyms */
+function fixAllCaps(name: string): string {
+  const letters = name.replace(/[^\p{L}]/gu, "");
+  if (letters.length < 5 || letters !== letters.toUpperCase()) return name;
+  return name.replace(/[\p{L}][\p{L}'’]*/gu, (word, offset: number) => {
+    if (word.length <= 3 && offset !== 0 && !/^(DE|DU|DES|LA|LE|LES|ET|ET|AU|AUX|EN|VAN|DEN|DER)$/.test(word)) return word;
+    if (word.length <= 3 && offset === 0 && !/^(LA|LE|LES|AU|AUX)$/.test(word)) return word;
+    const lower = word.toLowerCase();
+    const cased = offset !== 0 && /^(de|du|des|la|le|les|et|au|aux|en)$/.test(lower) ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+    return cased.replace(/(['’])(\p{Ll})/u, (_m, apostrophe: string, letter: string) => apostrophe + letter.toUpperCase()); // L'Avenue
+  });
+}
+
 // Built at runtime: the TS target (ES2017) rejects \p{…} in regex literals
 const EMOJI = new RegExp("[\\p{Extended_Pictographic}\\uFE0F\\u200D]", "gu");
 
 export function cleanBusinessName(name: string, city?: string | null): string {
   // Drop emojis ("Medphar Pharmacy💊") and the legal form, which nobody uses when talking about their own shop
-  let cleaned = name
+  let cleaned = fixAllCaps(name)
     .replace(EMOJI, "")
     .replace(/\s{2,}/g, " ")
     .split(" | ")[0]
