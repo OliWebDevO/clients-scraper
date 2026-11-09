@@ -6,6 +6,7 @@ import { checkEmail } from "@/lib/email-checks";
 import { businessToEmailData } from "@/lib/email-html-template";
 import { generateFirstContactEmail, SENDER } from "@/lib/prospect";
 import { plainEmailToHtml } from "@/lib/outreach";
+import { queueEmail } from "@/lib/outreach-queue";
 import {
   DEFAULT_DAILY_SETTINGS,
   brusselsDate,
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
     selectGoogleCandidates(supabase, config.google_count, { lookupEmails: true }),
   ]);
 
+  const review = config.review_before_send !== false;
   const result = { kbo: 0, google: 0, skipped: 0 };
   let first = true;
   const send = async (b: Candidate, bucket: "kbo" | "google") => {
@@ -50,6 +52,26 @@ export async function GET(request: NextRequest) {
     if (check.errors.length) {
       console.warn(`Daily outreach skipped ${b.name}: ${check.errors.join(" ")}`);
       result.skipped++;
+      return;
+    }
+    if (review) {
+      // Prepared + checked by AI, waits for approval on the "À valider" page
+      try {
+        await queueEmail(supabase, {
+          businessId: b.id,
+          recipientEmail: b.email!,
+          subject,
+          body,
+          kind: "first",
+          businessName: b.name,
+          category: b.category,
+          location: b.address,
+        });
+        result[bucket]++;
+      } catch (err) {
+        console.error(`Daily outreach queue failed for ${b.name}:`, err);
+        result.skipped++;
+      }
       return;
     }
     if (!first) await new Promise((r) => setTimeout(r, GAP_MS));
@@ -86,5 +108,5 @@ export async function GET(request: NextRequest) {
     .update({ value: { ...config, last_run_date: day, last_result: result } })
     .eq("key", "daily_outreach");
 
-  return NextResponse.json({ success: true, ...result });
+  return NextResponse.json({ success: true, mode: review ? "queued for review" : "sent", ...result });
 }

@@ -40,7 +40,14 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: false, error: "Heure entre 6 et 20, au maximum 30 envois par lot" }, { status: 400 });
   }
   const { supabase, value } = await load();
-  const next: DailyOutreachSettings = { ...value, enabled: body.enabled === true, hour, kbo_count: kbo, google_count: google };
+  const next: DailyOutreachSettings = {
+    ...value,
+    enabled: body.enabled === true,
+    hour,
+    kbo_count: kbo,
+    google_count: google,
+    review_before_send: body.review_before_send !== false,
+  };
   const { error } = await supabase
     .from("settings")
     .upsert({ key: "daily_outreach", value: next, updated_at: new Date().toISOString() }, { onConflict: "key" });

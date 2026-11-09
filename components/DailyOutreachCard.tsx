@@ -21,6 +21,7 @@ export function DailyOutreachCard() {
   const [hour, setHour] = useState("8");
   const [kboCount, setKboCount] = useState("15");
   const [googleCount, setGoogleCount] = useState("5");
+  const [review, setReview] = useState(true);
   const [lastRun, setLastRun] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,7 @@ export function DailyOutreachCard() {
         setHour(String(d.hour));
         setKboCount(String(d.kbo_count));
         setGoogleCount(String(d.google_count));
+        setReview(d.review_before_send !== false);
         setLastRun(
           d.last_run_date && d.last_result
             ? `${d.last_run_date} : ${d.last_result.kbo} KBO, ${d.last_result.google} Google${d.last_result.skipped ? `, ${d.last_result.skipped} ignorés` : ""}`
@@ -49,18 +51,32 @@ export function DailyOutreachCard() {
     load();
   }, []);
 
-  const save = async (nextEnabled = enabled) => {
+  const save = async (nextEnabled = enabled, nextReview = review) => {
     setSaving(true);
     try {
       const res = await fetch("/api/settings/daily-outreach", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: nextEnabled, hour: Number(hour), kbo_count: Number(kboCount), google_count: Number(googleCount) }),
+        body: JSON.stringify({
+          enabled: nextEnabled,
+          hour: Number(hour),
+          kbo_count: Number(kboCount),
+          google_count: Number(googleCount),
+          review_before_send: nextReview,
+        }),
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error);
       setEnabled(nextEnabled);
-      toast({ title: "Enregistré", description: nextEnabled ? `Envoi chaque jour à ${hour}h` : "Envoi quotidien désactivé" });
+      setReview(nextReview);
+      toast({
+        title: "Enregistré",
+        description: !nextEnabled
+          ? "Envoi quotidien désactivé"
+          : nextReview
+            ? `Chaque jour à ${hour}h, les mails sont préparés dans « À valider »`
+            : `Envoi direct chaque jour à ${hour}h`,
+      });
       load();
     } catch (err) {
       toast({ title: "Erreur", description: err instanceof Error ? err.message : "Échec de l'enregistrement", variant: "destructive" });
@@ -91,6 +107,10 @@ export function DailyOutreachCard() {
               <div className="flex items-center gap-3">
                 <Switch id="daily-enabled" checked={enabled} onCheckedChange={(v) => save(v)} disabled={saving} />
                 <Label htmlFor="daily-enabled">{enabled ? "Activé" : "Désactivé"}</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch id="daily-review" checked={review} onCheckedChange={(v) => save(enabled, v)} disabled={saving} />
+                <Label htmlFor="daily-review">{review ? "Valider chaque mail avant envoi" : "Envoi direct, sans validation"}</Label>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="daily-hour">Heure</Label>

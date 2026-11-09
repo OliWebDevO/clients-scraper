@@ -170,6 +170,9 @@ Un développeur web indépendant à Bruxelles écrit à une petite entreprise lo
 
 Vérifie et signale uniquement les vrais problèmes :
 - fautes d'orthographe, de grammaire, d'accents, de ponctuation (espaces avant : ; ? ! en français)
+- mots en trop ou manquants (ex. « en ouvrant le site, et j'ai remarqué »), articles oubliés devant un nom d'enseigne (« de la Friterie X », « du Salon Y »)
+- phrases trop longues ou ambiguës (une phrase = une idée), énumérations qui s'enchaînent mal
+- langue : si la commune du destinataire est en Flandre, un email en français est un problème à signaler
 - incohérences ou informations qui sonnent faux / génériques / automatisées
 - ton : vouvoiement, poli, chaleureux, ni insistant ni trop commercial
 - longueur : un premier contact doit faire moins de 150 mots, un seul appel à l'action clair
@@ -179,7 +182,7 @@ Vérifie et signale uniquement les vrais problèmes :
 Réponds UNIQUEMENT en JSON : {"verdict": "Prêt à envoyer" | "À corriger", "problems": [..], "suggestions": [..]}
 Chaque élément : une phrase courte en français, en citant le passage concerné. Listes vides si rien à signaler.`;
 
-export async function reviewOutreachEmail(input: { subject: string; text: string; category: string | null }): Promise<EmailReview> {
+export async function reviewOutreachEmail(input: { subject: string; text: string; category: string | null; location?: string | null }): Promise<EmailReview> {
   const client = getOpenAIClient();
   const response = await client.chat.completions.create({
     model: AI_MODEL,
@@ -189,7 +192,7 @@ export async function reviewOutreachEmail(input: { subject: string; text: string
       { role: "system", content: reviewSystemPrompt },
       {
         role: "user",
-        content: `Secteur du destinataire : ${sanitizeAiInput(input.category) || "inconnu"}\n\nSujet : ${input.subject.slice(0, 300)}\n\n--- EMAIL ---\n${input.text.slice(0, 6000)}`,
+        content: `Secteur du destinataire : ${sanitizeAiInput(input.category) || "inconnu"}\nAdresse du destinataire : ${sanitizeAiInput(input.location) || "inconnue"}\n\nSujet : ${input.subject.slice(0, 300)}\n\n--- EMAIL ---\n${input.text.slice(0, 6000)}`,
       },
     ],
   });

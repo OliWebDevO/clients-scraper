@@ -7,17 +7,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlatform, getWebsiteProfile } from "./prospect";
 import { analyzeWebsite, pickEmail } from "./website-analyzer";
+import { queuedBusinessIds } from "./outreach-queue";
 
 export interface DailyOutreachSettings {
   enabled: boolean;
   hour: number; // Brussels time
   kbo_count: number;
   google_count: number;
+  review_before_send?: boolean; // default true: emails wait on the "À valider" page
   last_run_date?: string; // YYYY-MM-DD, Brussels
   last_result?: { kbo: number; google: number; skipped: number };
 }
 
-export const DEFAULT_DAILY_SETTINGS: DailyOutreachSettings = { enabled: false, hour: 8, kbo_count: 15, google_count: 5 };
+export const DEFAULT_DAILY_SETTINGS: DailyOutreachSettings = { enabled: false, hour: 8, kbo_count: 15, google_count: 5, review_before_send: true };
 
 export const CANDIDATE_FIELDS =
   "id, name, rating, review_count, category, address, has_website, website_url, website_score, website_issues, email, source, company_start_date, legal_person";
@@ -76,14 +78,15 @@ export function brusselsDate(date = new Date()): { day: string; hour: number } {
   return { day, hour };
 }
 
-/** Never contacted, not opted out */
+/** Never contacted (nor already waiting in the review queue), not opted out */
 async function excludedIds(supabase: SupabaseClient): Promise<{ contacted: Set<string>; optedOut: Set<string> }> {
-  const [{ data: sent }, { data: optOuts }] = await Promise.all([
+  const [{ data: sent }, { data: optOuts }, queued] = await Promise.all([
     supabase.from("sent_emails").select("business_id").not("business_id", "is", null).limit(10000),
     supabase.from("email_optouts").select("email").limit(10000),
+    queuedBusinessIds(supabase),
   ]);
   return {
-    contacted: new Set((sent || []).map((s) => s.business_id as string)),
+    contacted: new Set([...(sent || []).map((s) => s.business_id as string), ...queued]),
     optedOut: new Set((optOuts || []).map((o) => o.email as string)),
   };
 }

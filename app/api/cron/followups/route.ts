@@ -11,6 +11,8 @@ import {
   plainEmailToHtml,
   type FollowUpSettings,
 } from "@/lib/outreach";
+import { queueEmail, queuedBusinessIds } from "@/lib/outreach-queue";
+import { DEFAULT_DAILY_SETTINGS, type DailyOutreachSettings } from "@/lib/daily-outreach";
 
 export const maxDuration = 300;
 
@@ -58,6 +60,12 @@ export async function GET(request: NextRequest) {
   for (const e of firsts) if (!latestByBusiness.has(e.business_id)) latestByBusiness.set(e.business_id, e);
   const ids = [...latestByBusiness.keys()];
 
+  // Same review switch as the daily send: follow-ups wait on the "À valider" page too
+  const { data: dailySetting } = await supabase.from("settings").select("value").eq("key", "daily_outreach").maybeSingle();
+  const review =
+    ({ ...DEFAULT_DAILY_SETTINGS, ...(dailySetting?.value as Partial<DailyOutreachSettings> | undefined) }).review_before_send !== false;
+  const queuedFollowups = await queuedBusinessIds(supabase, "followup");
+
   const [{ data: followed }, { data: businesses }, { data: optOuts }] = await Promise.all([
     supabase.from("sent_emails").select("business_id").eq("kind", "followup").in("business_id", ids),
     supabase.from("businesses").select("id, name, address, source, replied, do_not_contact").in("id", ids),
@@ -72,7 +80,7 @@ export async function GET(request: NextRequest) {
     if (results.filter((r) => r.status === "sent").length >= MAX_PER_RUN) break;
     const business = businessById.get(businessId);
     if (!business || business.replied || business.do_not_contact) continue;
-    if (alreadyFollowed.has(businessId) || optedOut.has(first.recipient_email)) continue;
+    if (alreadyFollowed.has(businessId) || queuedFollowups.has(businessId) || optedOut.has(first.recipient_email)) continue;
 
     const { subject, body } = generateFollowUpEmail({
       businessName: business.name,
@@ -88,6 +96,24 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
+    if (review) {
+      try {
+        await queueEmail(supabase, {
+          businessId,
+          recipientEmail: first.recipient_email,
+          subject,
+          body,
+          kind: "followup",
+          businessName: business.name,
+          location: business.address,
+        });
+        results.push({ business: business.name, status: "sent" }); // counts toward MAX_PER_RUN
+      } catch (err) {
+        console.error(`Follow-up queue failed for ${business.name}:`, err);
+        results.push({ business: business.name, status: "failed" });
+      }
+      continue;
+    }
     if (results.some((r) => r.status === "sent")) await new Promise((r) => setTimeout(r, GAP_MS));
     try {
       const sent = await sendEmail({
