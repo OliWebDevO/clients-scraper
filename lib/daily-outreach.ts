@@ -39,6 +39,12 @@ export interface Candidate {
   legal_person: boolean | null;
 }
 
+/** French-speaking area only: Brussels (1000-1210) + Walloon Brabant (1300-1499). The email is in French. */
+export function isFrenchSpeakingArea(address: string | null): boolean {
+  const postcode = Number(address?.match(/\b(\d{4})\s+[^\d,]+(?:,\s*(?:Belgique|Belgium|België))?\s*$/i)?.[1]);
+  return postcode >= 1000 && postcode <= 1499;
+}
+
 const KBO_MAX_AGE_DAYS = 365; // "félicitations pour le lancement" stays true for a year
 const EMAIL_LOOKUPS_PER_RUN = 15;
 
@@ -129,7 +135,7 @@ export async function selectKboCandidates(supabase: SupabaseClient, limit: numbe
   const { contacted, optedOut } = await excludedIds(supabase);
   return ((data || []) as Candidate[])
     .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()))
-    .filter((b) => isBusinessAddress(b.email!, b.name))
+    .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address))
     .slice(0, limit);
 }
 
@@ -154,7 +160,7 @@ export async function selectGoogleCandidates(
   const replyRate = await sectorReplyRates(supabase);
 
   const pool = ((data || []) as Candidate[])
-    .filter((b) => !contacted.has(b.id))
+    .filter((b) => !contacted.has(b.id) && isFrenchSpeakingArea(b.address))
     .filter((b) => {
       const profile = getWebsiteProfile({ hasWebsite: b.has_website, websiteUrl: b.website_url, websiteScore: b.website_score });
       return profile !== "ok"; // no site, social/booking page only, or outdated site

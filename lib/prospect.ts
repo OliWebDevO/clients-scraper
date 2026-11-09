@@ -98,7 +98,7 @@ export function websiteDomain(url: string | null | undefined): string | null {
 
 const ISSUE_PHRASES: Array<{ match: RegExp; phrase: string }> = [
   { match: /viewport|responsive|mobile/i, phrase: "il ne s'adapte pas bien aux téléphones, alors que la majorité de vos visiteurs arrivent depuis un mobile" },
-  { match: /https/i, phrase: "il n'est pas sécurisé (pas de HTTPS) : certains navigateurs affichent « Non sécurisé » à vos visiteurs" },
+  { match: /https/i, phrase: "il n'est pas sécurisé (pas de HTTPS), si bien que certains navigateurs le signalent comme « Non sécurisé »" },
   { match: /chargement lent/i, phrase: "il met du temps à s'afficher, et beaucoup de visiteurs partent avant" },
   { match: /copyright obsolète/i, phrase: "il semble ne plus avoir été mis à jour depuis plusieurs années" },
   { match: /obsolète|tables pour la mise en page/i, phrase: "il repose sur une technique ancienne qui le rend difficile à faire évoluer" },
@@ -237,6 +237,22 @@ export function getCity(address: string | null | undefined): string | null {
   return city ? cityToFrench(city) : null;
 }
 
+// Names that start with a common noun take an article: "le lancement de la Friterie « Chez Loris »"
+const FEMININE_NOUNS = /^(friterie|boulangerie|boucherie|charcuterie|pâtisserie|patisserie|brasserie|pharmacie|épicerie|epicerie|librairie|maison|boutique|fromagerie|pizzeria|taverne|clinique|agence|société|societe|menuiserie|carrosserie|bijouterie|parfumerie|cave|cuisine|crèche|creche|école|ecole)\b/i;
+const MASCULINE_NOUNS = /^(salon|restaurant|café|cafe|cabinet|garage|institut|atelier|studio|bar|bistro|bistrot|snack|traiteur|centre|comptoir|espace|hôtel|hotel|club|cercle|magasin|bureau)\b/i;
+
+/** "Friterie X" → "la Friterie X"; with "de": "de la Friterie X", "du Salon X", "de l'Atelier X", "de NT Cooking" */
+export function withArticle(name: string, preposition?: "de"): string {
+  const vowel = /^[aeiouyéèêàâîôûh]/i.test(name);
+  let article = "";
+  if (FEMININE_NOUNS.test(name)) article = vowel ? "l'" : "la ";
+  else if (MASCULINE_NOUNS.test(name)) article = vowel ? "l'" : "le ";
+  if (preposition !== "de") return `${article}${name}`;
+  if (article === "le ") return `du ${name}`;
+  if (article) return `de ${article}${name}`;
+  return /^[aeiouyéèêàâîôû]/i.test(name) ? `d'${name}` : `de ${name}`;
+}
+
 /** Started within the last 12 months */
 export function isRecentlyStarted(startDate: string | null | undefined): boolean {
   if (!startDate) return false;
@@ -287,8 +303,8 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
   let hook: string;
   if (fromKbo) {
     hook = isRecentlyStarted(data.companyStartDate)
-      ? `Félicitations pour le lancement de ${isPerson ? "votre activité" : name}${city ? ` à ${city}` : ""} !`
-      : `J'ai découvert ${isPerson ? "votre activité" : name}${city ? ` à ${city}` : ""} dans le registre des entreprises.`;
+      ? `Félicitations pour le lancement ${isPerson ? "de votre activité" : withArticle(name, "de")}${city ? ` à ${city}` : ""} !`
+      : `J'ai découvert ${isPerson ? "votre activité" : withArticle(name)}${city ? ` à ${city}` : ""} dans le registre des entreprises.`;
   } else if (strongReputation) {
     hook = `${data.reviewCount} avis à ${stars}/5 sur Google : ${name} fait clairement les choses bien.`;
   } else if (goodRating) {
@@ -321,10 +337,10 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
     case "ok": {
       const issues = plainIssues(data.websiteIssues);
       const domain = websiteDomain(data.websiteUrl) ?? "votre site";
-      const opening = question ? `Aujourd'hui, il tombe sur ${domain}` : `Mais en ouvrant ${domain}`;
+      const opening = question ? `Aujourd'hui, il tombe sur ${domain}, et` : `Mais en ouvrant ${domain},`;
       gap = issues.length
-        ? `${opening}, et j'ai remarqué qu'${issues.join(", et qu'")}.`
-        : `${opening}, et je trouve qu'il ne rend pas justice à ce que vous faites.`;
+        ? `${opening} j'ai remarqué qu'${issues.join(", et qu'")}.`
+        : `${opening} je trouve qu'il ne rend pas justice à ce que vous faites.`;
       cost = `Résultat : une partie des visiteurs repart avant même de vous contacter.`;
       subject = `Une remarque sur ${domain}`;
       break;
@@ -333,7 +349,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
       if (fromKbo) {
         gap = `C'est le meilleur moment pour avoir un site : vos premiers clients vont vous chercher sur Google, et une présence soignée dès le départ fait toute la différence.`;
         cost = "";
-        subject = isPerson ? "Félicitations pour votre lancement" : `Félicitations pour ${name}`;
+        subject = isPerson ? "Félicitations pour votre lancement" : `Félicitations pour ${withArticle(name)}`;
       } else {
         gap = question
           ? `Aujourd'hui, uniquement votre fiche Google : pas de site pour ${showcase}.`
@@ -350,9 +366,9 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
   // 4. Offer, 5. one low-friction call to action
   const offer =
     profile === "outdated" || profile === "ok"
-      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site en gardant votre contenu, beau, rapide sur mobile et bien placé sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
+      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit beau, rapide sur mobile et bien placé sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
       : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : beaux, rapides sur mobile et bien placés sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`;
-  const cta = `Je peux vous montrer en 10 minutes à quoi pourrait ressembler le site de ${isPerson ? "votre activité" : name}, ${isPerson ? "par téléphone" : "par téléphone ou en passant vous voir"}. Cela vous intéresse ?`;
+  const cta = `Je peux vous montrer en 10 minutes à quoi pourrait ressembler le site ${isPerson ? "de votre activité" : withArticle(name, "de")}, ${isPerson ? "par téléphone" : "par téléphone ou en passant vous voir"}. Cela vous intéresse ?`;
 
   const body = [
     "Bonjour,",
