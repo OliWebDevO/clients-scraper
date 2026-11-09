@@ -39,7 +39,7 @@ export interface Candidate {
   legal_person: boolean | null;
 }
 
-const KBO_MAX_AGE_DAYS = 180;
+const KBO_MAX_AGE_DAYS = 365; // "félicitations pour le lancement" stays true for a year
 const EMAIL_LOOKUPS_PER_RUN = 15;
 
 /** Email on the business' own website domain (info@salon.be), not a personal mailbox */

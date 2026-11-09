@@ -237,7 +237,7 @@ export const SENDER = {
   name: "Oliver Van Droogenbroeck",
   title: "Développeur web · Bruxelles",
   email: "webdev@olivervdb.com",
-  website: "olivervdb.com",
+  website: "https://www.olivervdb.com/",
   // From SENDER_PHONE in .env.local (exposed to the browser via next.config.ts)
   phone: process.env.SENDER_PHONE || "",
 };

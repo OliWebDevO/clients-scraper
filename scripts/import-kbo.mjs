@@ -7,10 +7,10 @@
 //    Import:   node --env-file=.env.local scripts/import-kbo.mjs ~/Downloads/KboOpenData
 //
 // Options:
-//   --since-days=90            only businesses started in the last N days (default 90)
-//   --zip=1000-1210,1300-1499  postcode ranges (default: Brussels Region 1000-1210)
+//   --since-days=365           only businesses started in the last N days (default 365)
+//   --zip=1000-1210,1300-1499  postcode ranges (default: Brussels + Walloon/Flemish Brabant 1000-1999,3000-3499)
 //   --keywords=coiffure,restauration   match on the French NACE description of the main activity
-//   --limit=500                max rows to import
+//   --limit=10000              max rows to import
 //   --dry-run                  print what would be imported, write nothing
 import fs from "node:fs";
 import path from "node:path";
@@ -30,10 +30,10 @@ const args = process.argv.slice(2);
 const dir = args.find((a) => !a.startsWith("--"));
 const opt = (name, fallback) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=") ?? fallback;
 const dryRun = args.includes("--dry-run");
-const sinceDays = Number(opt("since-days", "90"));
-const limit = Number(opt("limit", "500"));
+const sinceDays = Number(opt("since-days", "365"));
+const limit = Number(opt("limit", "10000"));
 const keywords = opt("keywords", DEFAULT_KEYWORDS.join(",")).split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
-const zipRanges = opt("zip", "1000-1210").split(",").map((r) => {
+const zipRanges = opt("zip", "1000-1999,3000-3499").split(",").map((r) => {
   const [a, b] = r.split("-").map(Number);
   return [a, b ?? a];
 });

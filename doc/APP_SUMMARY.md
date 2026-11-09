@@ -289,7 +289,7 @@ Cron jobs are configured in `vercel.json` to run hourly.
 
 **KBO / BCE Open Data (new businesses)**
 - Download the free monthly "Full" export (registration required) on economie.fgov.be → *KBO Open Data*, unzip it.
-- `node --env-file=.env.local scripts/import-kbo.mjs <folder> --dry-run` then without `--dry-run`. Options: `--since-days=90`, `--zip=1000-1210`, `--keywords=coiffure,restauration`, `--limit=500`.
+- `node --env-file=.env.local scripts/import-kbo.mjs <folder> --dry-run` then without `--dry-run`. Defaults: last 365 days, Brussels + Walloon/Flemish Brabant (`--zip=1000-1999,3000-3499`), target sectors. Options: `--since-days=`, `--zip=`, `--keywords=coiffure,restauration`, `--limit=`.
 - KBO businesses get an honest "félicitations pour le lancement" opener (not "found you on Google").
 
 **Login reset:** `node --env-file=.env.local scripts/set-password.mjs <email>`
