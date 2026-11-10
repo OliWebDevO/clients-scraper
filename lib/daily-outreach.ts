@@ -49,6 +49,25 @@ export function isFrenchSpeakingArea(address: string | null): boolean {
 
 const KBO_MAX_AGE_DAYS = 365; // "félicitations pour le lancement" stays true for a year
 const EMAIL_LOOKUPS_PER_RUN = 15;
+const SITE_ANALYSES_PER_RUN = 40; // fresh analysis of each candidate's site at send time
+
+/**
+ * Analyse a site now (not the possibly months-old result from the scrape) and save it.
+ * Returns null when the site can't be reached: we then don't email about it.
+ */
+async function freshAnalysis(supabase: SupabaseClient, b: Candidate): Promise<boolean> {
+  const analysis = await analyzeWebsite(b.website_url!);
+  if (!analysis) return false;
+  b.website_score = analysis.score;
+  b.website_issues = analysis.issues;
+  const update: Record<string, unknown> = { website_score: analysis.score, website_issues: analysis.issues };
+  if (!b.email) {
+    const email = pickEmail(analysis.emails, analysis.url);
+    if (email) b.email = update.email = email;
+  }
+  await supabase.from("businesses").update(update).eq("id", b.id);
+  return true;
+}
 
 const FREE_MAILBOX = /^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|icloud|me|aol|gmx|proton|protonmail|skynet|telenet|proximus|scarlet|voo|orange)\./i;
 
@@ -151,16 +170,17 @@ export async function selectKboCandidates(
   for (const b of pool) {
     if (picked.length >= limit) break;
     const realSite = !!b.website_url && !getPlatform(b.website_url);
-    if (realSite && b.website_score == null) {
-      if (!analyzeSites || analysed >= EMAIL_LOOKUPS_PER_RUN) continue; // preview: not analysed yet → not counted
-      analysed++;
-      const analysis = await analyzeWebsite(b.website_url!);
-      if (!analysis) continue;
-      b.website_score = analysis.score;
-      b.website_issues = analysis.issues;
-      await supabase.from("businesses").update({ website_score: analysis.score, website_issues: analysis.issues }).eq("id", b.id);
+    if (realSite) {
+      if (analyzeSites) {
+        // Send time: analyse the site now, the email only mentions what is true today
+        if (analysed >= SITE_ANALYSES_PER_RUN) continue;
+        analysed++;
+        if (!(await freshAnalysis(supabase, b))) continue; // unreachable
+      } else if (b.website_score == null) {
+        continue; // preview: never analysed yet → not counted
+      }
+      if ((b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // their site is fine
     }
-    if (realSite && (b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // their site is fine
     picked.push(b);
   }
   return picked;
@@ -200,18 +220,17 @@ export async function selectGoogleCandidates(
     );
 
   const picked: Candidate[] = [];
-  let lookups = 0;
+  let analysed = 0;
   for (const b of pool) {
     if (picked.length >= limit) break;
-    // Fill a missing email from the business' own website
-    if (!b.email && lookupEmails && lookups < EMAIL_LOOKUPS_PER_RUN && b.website_url && !getPlatform(b.website_url)) {
-      lookups++;
-      const analysis = await analyzeWebsite(b.website_url);
-      const email = analysis ? pickEmail(analysis.emails, analysis.url) : null;
-      if (email) {
-        b.email = email;
-        await supabase.from("businesses").update({ email }).eq("id", b.id);
-      }
+    const realSite = !!b.website_url && !getPlatform(b.website_url);
+    if (realSite && lookupEmails) {
+      // Send time: re-analyse the site (the scrape may be months old) and fill a missing email
+      if (!b.email && analysed >= EMAIL_LOOKUPS_PER_RUN) continue;
+      if (analysed >= SITE_ANALYSES_PER_RUN) continue;
+      analysed++;
+      if (!(await freshAnalysis(supabase, b))) continue; // unreachable
+      if ((b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // improved since the scrape: nothing to suggest
     }
     if (!b.email || optedOut.has(b.email.toLowerCase())) continue;
     if (!isBusinessAddress(b.email, b.name)) continue; // impersonal business address only
