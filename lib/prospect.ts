@@ -317,7 +317,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
       ? `Félicitations pour le lancement ${isPerson ? "de votre activité" : withArticle(name, "de")}${city ? ` à ${city}` : ""} !`
       : `J'ai découvert ${isPerson ? "votre activité" : withArticle(name)}${city ? ` à ${city}` : ""} dans le registre des entreprises.`;
   } else if (strongReputation) {
-    hook = `${data.reviewCount} avis à ${stars}/5 sur Google : ${name} fait clairement les choses bien.`;
+    hook = `Avec ${data.reviewCount} avis à ${stars}/5 sur Google, ${name} jouit déjà d'une très belle réputation.`;
   } else if (goodRating) {
     hook = `Vos clients notent ${name} ${stars}/5 sur Google${city ? `, à ${city}` : ""}.`;
   } else {
@@ -363,7 +363,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
     }
     default:
       if (fromKbo) {
-        gap = `C'est le meilleur moment pour avoir un site : vos premiers clients vont vous chercher sur Google, et une présence soignée dès le départ fait toute la différence.`;
+        gap = `C'est le meilleur moment pour avoir un site : vos premiers clients vont vous chercher sur Google, et une présence professionnelle dès le départ fait toute la différence.`;
         cost = "";
         subject = isPerson ? "Félicitations pour votre lancement" : `Félicitations pour ${withArticle(name)}`;
       } else {
