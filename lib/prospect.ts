@@ -365,7 +365,9 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
       if (fromKbo) {
         gap = `C'est le meilleur moment pour avoir un site : vos premiers clients vont vous chercher sur Google, et une présence professionnelle dès le départ fait toute la différence.`;
         cost = "";
-        subject = isPerson ? "Félicitations pour votre lancement" : `Félicitations pour ${withArticle(name)}`;
+        subject = isPerson
+          ? "Félicitations pour le lancement de votre activité"
+          : `Félicitations pour le lancement ${withArticle(name, "de")}`;
       } else {
         gap = question
           ? `Aujourd'hui, votre fiche Google fait déjà le travail. Un site à votre nom lui permettrait en plus ${deShowcase}.`
