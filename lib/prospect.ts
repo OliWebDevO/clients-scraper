@@ -376,8 +376,8 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
   // 4. Offer, 5. one low-friction call to action
   const offer =
     profile === "outdated" || profile === "ok"
-      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit soigné, rapide sur mobile et bien positionné sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
-      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : soignés, rapides sur mobile et bien positionnés sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`;
+      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit élégant, adapté au mobile, et bien positionné sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
+      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : élégants, adaptés au mobile, et bien positionnés sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`;
   const cta = `Je peux vous montrer en 10 minutes à quoi pourrait ressembler le site ${isPerson ? "de votre activité" : withArticle(name, "de")}, ${isPerson ? "par téléphone" : "par téléphone ou en passant vous voir"}. Cela vous intéresse ?`;
 
   const body = [
