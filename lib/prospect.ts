@@ -259,7 +259,8 @@ export function withArticle(name: string, preposition?: "de"): string {
   if (preposition !== "de") return `${article}${name}`;
   if (article === "le ") return `du ${name}`;
   if (article) return `de ${article}${name}`;
-  return /^[aeiouyéèêàâîôû]/i.test(name) ? `d'${name}` : `de ${name}`;
+  // No elision before a consonant-sounding Y ("de Yuka Coffee Bar")
+  return /^[aeiouéèêàâîôû]/i.test(name) ? `d'${name}` : `de ${name}`;
 }
 
 /** Started within the last 12 months */
@@ -276,6 +277,7 @@ export const SENDER = {
   title: "Développeur web · Bruxelles",
   email: "webdev@olivervdb.com",
   website: "https://www.olivervdb.com/",
+  portfolio: "https://www.olivervdb.com/fr#work", // "Projets" section: Annick, Fanal, Le Noyer, Les Arts
   // From SENDER_PHONE in .env.local (exposed to the browser via next.config.ts)
   phone: process.env.SENDER_PHONE || "",
 };
@@ -385,6 +387,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
     [hook, gap].join(" "),
     cost,
     offer,
+    `Pour vous faire une idée, quelques-unes de mes réalisations sont à découvrir ici : ${SENDER.portfolio}`,
     cta,
     `Bien cordialement,\n${signature()}`,
   ]
