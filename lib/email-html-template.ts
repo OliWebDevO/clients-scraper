@@ -7,6 +7,7 @@ import {
   getCity,
   cleanBusinessName,
   plainIssues,
+  joinIdeas,
   reputationPhrase,
   formatRating,
 } from "./prospect";
@@ -97,7 +98,7 @@ export function generateDefaults(data: HtmlEmailData): Required<HtmlEmailOverrid
     );
   }
   if (issues.length) {
-    paragraphs.push(`En regardant votre site actuel, j'ai remarqué qu'${issues.join(", et qu'")}.`);
+    paragraphs.push(`En regardant votre site actuel, j'ai vu ${issues.length > 1 ? "quelques pistes" : "une piste simple"} pour qu'il vous apporte encore plus de clients : ${joinIdeas(issues)}.`);
   }
   paragraphs.push(benefit);
   paragraphs.push(`Je serais ravi d'en discuter autour d'un café ou lors d'un court appel téléphonique, sans engagement.`);

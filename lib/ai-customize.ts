@@ -174,7 +174,7 @@ Vérifie et signale uniquement les vrais problèmes :
 - phrases trop longues ou ambiguës (une phrase = une idée), énumérations qui s'enchaînent mal
 - langue : si la commune du destinataire est en Flandre, un email en français est un problème à signaler
 - incohérences ou informations qui sonnent faux / génériques / automatisées
-- ton : vouvoiement, poli, chaleureux, ni insistant ni trop commercial
+- ton : vouvoiement, poli, chaleureux, ni insistant ni trop commercial, toujours positif (aucune phrase qui critique le destinataire ou son site)
 - longueur : un premier contact doit faire moins de 150 mots, un seul appel à l'action clair
 - adéquation au secteur du destinataire
 - éléments qui risquent de déclencher les filtres anti-spam
@@ -223,6 +223,7 @@ Tu reçois le SUJET et le CORPS d'un email (sans la signature). Corrige UNIQUEME
 - l'orthographe, la grammaire, les accents, la ponctuation (espaces avant : ; ? ! en français)
 - les mots en trop ou manquants (« en ouvrant le site, et j'ai remarqué » → « en ouvrant le site, j'ai remarqué »)
 - les phrases lourdes ou ambiguës : reformule au minimum pour qu'elles se lisent naturellement
+- le ton : l'email doit rester positif et valorisant. Si une phrase sonne comme une critique du destinataire ou de son site, reformule-la comme une opportunité, sans changer les faits
 
 Règles strictes :
 - ne change AUCUN fait : garde tels quels les chiffres, notes, nombres d'avis, noms d'entreprise, noms de domaine, villes

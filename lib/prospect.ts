@@ -96,16 +96,25 @@ export function websiteDomain(url: string | null | undefined): string | null {
 
 /* ── Website issues in plain French (for the business owner, not a developer) ── */
 
+// Phrased as opportunities, never as criticism: they follow "quelques pistes pour … :"
 const ISSUE_PHRASES: Array<{ match: RegExp; phrase: string }> = [
-  { match: /viewport|responsive|mobile/i, phrase: "il ne s'adapte pas bien aux téléphones, alors que la majorité de vos visiteurs arrivent depuis un mobile" },
-  { match: /https/i, phrase: "il n'est pas sécurisé (pas de HTTPS), si bien que certains navigateurs le signalent comme « Non sécurisé »" },
-  { match: /chargement lent/i, phrase: "il met du temps à s'afficher, et beaucoup de visiteurs partent avant" },
-  { match: /copyright obsolète/i, phrase: "il semble ne plus avoir été mis à jour depuis plusieurs années" },
-  { match: /obsolète|tables pour la mise en page/i, phrase: "il repose sur une technique ancienne qui le rend difficile à faire évoluer" },
-  { match: /meta tags|seo/i, phrase: "il est peu optimisé pour ressortir dans les recherches Google" },
+  { match: /viewport|responsive|mobile/i, phrase: "une version pensée pour le mobile, puisque la majorité des visiteurs arrivent aujourd'hui depuis un téléphone" },
+  { match: /https/i, phrase: "le passage en HTTPS, pour que tous les navigateurs l'affichent comme sécurisé" },
+  { match: /chargement lent/i, phrase: "un affichage plus rapide, pour garder chaque visiteur jusqu'à la prise de contact" },
+  { match: /copyright obsolète/i, phrase: "un contenu rafraîchi, qui reflète votre activité d'aujourd'hui" },
+  { match: /obsolète|tables pour la mise en page/i, phrase: "une base technique moderne, plus simple à faire évoluer" },
+  { match: /meta tags|seo/i, phrase: "un meilleur référencement, pour ressortir davantage dans les recherches Google" },
 ];
 
-/** Up to `max` client-friendly issue sentences, most persuasive first */
+/** Improvement ideas already contain commas: "a, ainsi qu'b" reads better than "a et b" */
+export function joinIdeas(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  const last = items[items.length - 1];
+  const link = /^[aeiouyéèêh]/i.test(last) ? "ainsi qu'" : "ainsi que ";
+  return `${items.slice(0, -1).join(", ")}, ${link}${last}`;
+}
+
+/** Up to `max` improvement ideas in plain French, most persuasive first */
 export function plainIssues(issues: string[] | null | undefined, max = 2): string[] {
   if (!issues?.length) return [];
   const result: string[] = [];
@@ -121,7 +130,7 @@ export function plainIssues(issues: string[] | null | undefined, max = 2): strin
 interface SectorPitch {
   /** What a website concretely brings in this sector (one sentence) */
   benefit: string;
-  /** What a visitor can't do without a site: "pas de site pour …" */
+  /** What a site would let visitors do; read after "de": "permettrait de …" */
   showcase: string;
 }
 
@@ -132,38 +141,38 @@ const SECTOR_PITCHES: Array<{ match: RegExp; pitch: SectorPitch }> = [
   },
   {
     match: /coiff|barb|beaut|esth[eé]ti|ongle|nail|manucure|maquill|spa\b|tatou|piercing|cils|bronzage/i,
-    pitch: { benefit: "Pour un salon, un site avec vos prestations, vos tarifs et la prise de rendez-vous en ligne remplit l'agenda sans passer vos journées au téléphone.", showcase: "voir vos prestations, vos tarifs ou prendre rendez-vous" },
+    pitch: { benefit: "Pour un salon, un site avec vos prestations, vos tarifs et la prise de rendez-vous en ligne remplit l'agenda sans passer vos journées au téléphone.", showcase: "voir vos prestations, vos tarifs ou de prendre rendez-vous" },
   },
   {
     match: /pharmac|apotheek|parapharm/i,
     pitch: {
       benefit: "Pour une pharmacie, un site avec vos horaires, vos services (conseils, préparations, location de matériel…) et vos coordonnées aide les patients du quartier à venir chez vous plutôt qu'ailleurs.",
-      showcase: "connaître vos horaires, vos services ou vous contacter",
+      showcase: "connaître vos horaires, vos services ou de vous contacter",
     },
   },
   {
     match: /massage|kin[eé]|ost[eé]o|psych|th[eé]rap|sophro|naturo|di[eé]t[eé]|yoga|pilates|m[eé]decin|dentist|infirm|podolog|logop|sant[eé]/i,
-    pitch: { benefit: "Pour un cabinet, un site clair avec vos spécialités, vos horaires et la prise de rendez-vous rassure les nouveaux patients avant même le premier contact.", showcase: "découvrir vos spécialités ou prendre rendez-vous" },
+    pitch: { benefit: "Pour un cabinet, un site clair avec vos spécialités, vos horaires et la prise de rendez-vous rassure les nouveaux patients avant même le premier contact.", showcase: "découvrir vos spécialités ou de prendre rendez-vous" },
   },
   {
     match: /fitness|salle de sport|sport|crossfit|boxe|danse|arts martiaux|coach/i,
-    pitch: { benefit: "Pour une salle ou un coach, un site avec le planning des cours, les tarifs et l'inscription en ligne transforme les curieux en membres.", showcase: "voir le planning des cours, vos tarifs ou s'inscrire" },
+    pitch: { benefit: "Pour une salle ou un coach, un site avec le planning des cours, les tarifs et l'inscription en ligne transforme les curieux en membres.", showcase: "voir le planning des cours, vos tarifs ou de s'inscrire" },
   },
   {
     match: /boulang|p[aâ]tiss|boucher|charcut|fromag|chocolat|traiteur|[eé]picerie|primeur|caviste|vin|glacier|torr[eé]fact/i,
-    pitch: { benefit: "Pour un commerce de bouche, un site avec vos produits, vos horaires et la commande à emporter donne envie de passer la porte.", showcase: "découvrir vos produits, vos horaires ou commander" },
+    pitch: { benefit: "Pour un commerce de bouche, un site avec vos produits, vos horaires et la commande à emporter donne envie de passer la porte.", showcase: "découvrir vos produits, vos horaires ou de commander" },
   },
   {
     match: /plomb|[eé]lectric|chauff|menuis|peintr|carrel|toitur|couvreur|ma[cç]on|construct|r[eé]nov|jardin|parquet|vitr|serrur|chassis|ch[aâ]ssis|isolat|d[eé]m[eé]nag|nettoyage|entrepreneur|artisan/i,
-    pitch: { benefit: "Pour un artisan, un site avec vos réalisations en photos et un formulaire de demande de devis inspire confiance et vous amène des chantiers sans démarchage.", showcase: "voir vos réalisations ou vous demander un devis" },
+    pitch: { benefit: "Pour un artisan, un site avec vos réalisations en photos et un formulaire de demande de devis inspire confiance et vous amène des chantiers sans démarchage.", showcase: "voir vos réalisations ou de vous demander un devis" },
   },
   {
     match: /garage|carross|auto|moto|v[eé]lo|pneu|d[eé]pann/i,
-    pitch: { benefit: "Pour un garage, un site avec vos services, vos tarifs indicatifs et la prise de rendez-vous en ligne fait gagner du temps à vos clients comme à vous.", showcase: "voir vos services ou prendre rendez-vous" },
+    pitch: { benefit: "Pour un garage, un site avec vos services, vos tarifs indicatifs et la prise de rendez-vous en ligne fait gagner du temps à vos clients comme à vous.", showcase: "voir vos services ou de prendre rendez-vous" },
   },
   {
     match: /comptab|fiduciaire|avocat|notaire|immobili|assurance|architect|conseil|consult|traduct|agence/i,
-    pitch: { benefit: "Pour un cabinet de services, un site professionnel qui présente clairement votre expertise est souvent ce qu'un futur client consulte avant de vous appeler.", showcase: "comprendre votre expertise ou vous contacter" },
+    pitch: { benefit: "Pour un cabinet de services, un site professionnel qui présente clairement votre expertise est souvent ce qu'un futur client consulte avant de vous appeler.", showcase: "comprendre votre expertise ou de vous contacter" },
   },
   {
     match: /boutique|magasin|v[eê]tement|mode|chaussure|bijou|fleur|librair|cadeau|d[eé]co|meuble|opticien|animal|toilett/i,
@@ -173,7 +182,7 @@ const SECTOR_PITCHES: Array<{ match: RegExp; pitch: SectorPitch }> = [
 
 const DEFAULT_PITCH: SectorPitch = {
   benefit: "Un site clair, rapide et bien référencé permet aux personnes qui vous cherchent sur Google de vous trouver, de vous faire confiance et de vous contacter en un clic.",
-  showcase: "en savoir plus sur vous ou vous contacter facilement",
+  showcase: "en savoir plus sur vous ou de vous contacter facilement",
 };
 
 export function getSectorPitch(category: string | null | undefined): SectorPitch {
@@ -313,40 +322,41 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
     hook = `Petite question : quand un nouveau client entend parler de ${name}${city ? ` à ${city}` : ""}, que trouve-t-il en ligne ?`;
   }
 
-  // 2. The gap, and 3. what it costs them
+  // 2. The opportunity, and 3. why it matters. Always positive: never criticise their business or site.
   let gap: string;
   let cost: string;
   let subject: string;
-  const platformName = platform?.label.replace(/^votre (page|compte|fiche) /, "") ?? "";
+  const deShowcase = /^[aeiouéèêh]/i.test(showcase) ? `d'${showcase}` : `de ${showcase}`;
+  const DIFFERENCE = `C'est souvent ce qui fait la différence quand un client hésite entre deux adresses.`;
   switch (profile) {
     case "social":
-      gap = question
-        ? `Aujourd'hui, uniquement ${platform?.label ?? "vos réseaux sociaux"} : pas de site pour ${showcase}.`
-        : `Mais en dehors de ${platform?.label ?? "vos réseaux sociaux"}, impossible de vous trouver en ligne : pas de site pour ${showcase}.`;
-      cost = `Ces pages ressortent peu sur Google, et une partie des clients qui hésitent choisit l'adresse d'à côté, simplement parce qu'elle donne plus envie en ligne.`;
-      subject = `${name} mérite mieux qu'une page ${platformName || "sur les réseaux"}`;
+      gap =
+        `${platform ? platform.label.charAt(0).toUpperCase() + platform.label.slice(1) : "Votre présence sur les réseaux"} vous fait déjà connaître. ` +
+        `Un site à votre nom, en complément, vous rendrait aussi visible sur Google et permettrait à vos clients ${deShowcase}.`;
+      cost = DIFFERENCE;
+      subject = `Un site à votre nom pour ${name}`;
       break;
     case "booking":
-      gap = question
-        ? `Aujourd'hui, il tombe sur ${platform?.label ?? "une plateforme de réservation"}, qui affiche vos concurrents juste à côté de vous.`
-        : `Mais vos réservations passent par ${platform?.label ?? "une plateforme"}, qui affiche vos concurrents juste à côté de vous.`;
-      cost = `Un site à votre nom, avec votre propre bouton de réservation, garde ces clients chez vous.`;
+      gap =
+        `Vos réservations passent déjà par ${platform?.label ?? "une plateforme en ligne"}, c'est pratique. ` +
+        `Un site à votre nom, avec votre propre bouton de réservation, vous offrirait en plus une vitrine rien qu'à vous.`;
+      cost = "";
       subject = `Un site à votre nom pour ${name}`;
       break;
     case "outdated":
     case "ok": {
-      const issues = plainIssues(data.websiteIssues);
+      const ideas = plainIssues(data.websiteIssues);
       const domain = websiteDomain(data.websiteUrl) ?? "votre site";
-      const opening = question
-        ? `Aujourd'hui, il tombe sur ${domain}, et`
-        : fromKbo
-          ? `En ouvrant ${domain},` // after "Félicitations…", a "Mais" would contradict
-          : `Mais en ouvrant ${domain},`;
-      gap = issues.length
-        ? `${opening} j'ai remarqué qu'${issues.join(", et qu'")}.`
-        : `${opening} je trouve qu'il ne rend pas justice à ce que vous faites.`;
-      cost = `Résultat : une partie des visiteurs repart avant même de vous contacter.`;
-      subject = `Une remarque sur ${domain}`;
+      const visit = question ? `Aujourd'hui, il tombe sur ${domain}, une bonne base.` : `En visitant ${domain},`;
+      gap = ideas.length
+        ? question
+          ? `${visit} J'y vois ${ideas.length > 1 ? "quelques pistes" : "une piste simple"} pour qu'il vous apporte encore plus de clients : ${joinIdeas(ideas)}.`
+          : `${visit} j'ai vu ${ideas.length > 1 ? "quelques pistes" : "une piste simple"} pour qu'il vous apporte encore plus de clients : ${joinIdeas(ideas)}.`
+        : question
+          ? `${visit} J'ai quelques idées pour qu'il vous apporte encore plus de demandes.`
+          : `${visit} j'ai eu quelques idées pour qu'il vous apporte encore plus de demandes.`;
+      cost = `Ce sont souvent de petits changements qui font une vraie différence sur le nombre de demandes reçues.`;
+      subject = `Une idée pour ${domain}`;
       break;
     }
     default:
@@ -356,22 +366,18 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
         subject = isPerson ? "Félicitations pour votre lancement" : `Félicitations pour ${withArticle(name)}`;
       } else {
         gap = question
-          ? `Aujourd'hui, uniquement votre fiche Google : pas de site pour ${showcase}.`
-          : `Mais quand quelqu'un vous cherche, il ne trouve que votre fiche Google : pas de site pour ${showcase}.`;
-        cost = `Une partie des clients qui hésitent choisit l'adresse d'à côté, simplement parce qu'elle donne plus envie en ligne.`;
-        subject = strongReputation
-          ? `${name} : ${data.reviewCount} avis, mais pas de site`
-          : goodRating
-            ? `${name} : ${stars}/5 sur Google, mais pas de site`
-            : `Une question pour ${name}`;
+          ? `Aujourd'hui, votre fiche Google fait déjà le travail. Un site à votre nom lui permettrait en plus ${deShowcase}.`
+          : `Un site à votre nom permettrait à ceux qui vous cherchent ${deShowcase}, en un clic.`;
+        cost = DIFFERENCE;
+        subject = `Et si ${withArticle(name)} avait son site ?`;
       }
   }
 
   // 4. Offer, 5. one low-friction call to action
   const offer =
     profile === "outdated" || profile === "ok"
-      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit beau, rapide sur mobile et bien placé sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
-      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : beaux, rapides sur mobile et bien placés sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`;
+      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit soigné, rapide sur mobile et bien positionné sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`
+      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : soignés, rapides sur mobile et bien positionnés sur Google. Je m'occupe de tout, vous n'avez rien de technique à gérer.`;
   const cta = `Je peux vous montrer en 10 minutes à quoi pourrait ressembler le site ${isPerson ? "de votre activité" : withArticle(name, "de")}, ${isPerson ? "par téléphone" : "par téléphone ou en passant vous voir"}. Cela vous intéresse ?`;
 
   const body = [
