@@ -5,7 +5,7 @@
  *   ranked by the reply rate of their sector, then rating and number of reviews
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getPlatform, getWebsiteProfile } from "./prospect";
+import { getPlatform, getWebsiteProfile, GOOD_WEBSITE_SCORE } from "./prospect";
 import { analyzeWebsite, pickEmail } from "./website-analyzer";
 import { queuedBusinessIds } from "./outreach-queue";
 
@@ -122,7 +122,11 @@ async function sectorReplyRates(supabase: SupabaseClient): Promise<(category: st
   };
 }
 
-export async function selectKboCandidates(supabase: SupabaseClient, limit: number): Promise<Candidate[]> {
+export async function selectKboCandidates(
+  supabase: SupabaseClient,
+  limit: number,
+  { analyzeSites = false } = {}
+): Promise<Candidate[]> {
   const since = new Date(Date.now() - KBO_MAX_AGE_DAYS * 86400000).toISOString().slice(0, 10);
   const { data } = await supabase
     .from("businesses")
@@ -136,10 +140,30 @@ export async function selectKboCandidates(supabase: SupabaseClient, limit: numbe
     .order("company_start_date", { ascending: false })
     .limit(500);
   const { contacted, optedOut } = await excludedIds(supabase);
-  return ((data || []) as Candidate[])
+  const pool = ((data || []) as Candidate[])
     .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()))
-    .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address))
-    .slice(0, limit);
+    .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address));
+
+  // A KBO company that already has a website: never criticise it without evidence.
+  // Analyse it first; a good site or an unreachable one is skipped.
+  const picked: Candidate[] = [];
+  let analysed = 0;
+  for (const b of pool) {
+    if (picked.length >= limit) break;
+    const realSite = !!b.website_url && !getPlatform(b.website_url);
+    if (realSite && b.website_score == null) {
+      if (!analyzeSites || analysed >= EMAIL_LOOKUPS_PER_RUN) continue; // preview: not analysed yet → not counted
+      analysed++;
+      const analysis = await analyzeWebsite(b.website_url!);
+      if (!analysis) continue;
+      b.website_score = analysis.score;
+      b.website_issues = analysis.issues;
+      await supabase.from("businesses").update({ website_score: analysis.score, website_issues: analysis.issues }).eq("id", b.id);
+    }
+    if (realSite && (b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // their site is fine
+    picked.push(b);
+  }
+  return picked;
 }
 
 /**

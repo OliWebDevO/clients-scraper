@@ -337,7 +337,11 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
     case "ok": {
       const issues = plainIssues(data.websiteIssues);
       const domain = websiteDomain(data.websiteUrl) ?? "votre site";
-      const opening = question ? `Aujourd'hui, il tombe sur ${domain}, et` : `Mais en ouvrant ${domain},`;
+      const opening = question
+        ? `Aujourd'hui, il tombe sur ${domain}, et`
+        : fromKbo
+          ? `En ouvrant ${domain},` // after "Félicitations…", a "Mais" would contradict
+          : `Mais en ouvrant ${domain},`;
       gap = issues.length
         ? `${opening} j'ai remarqué qu'${issues.join(", et qu'")}.`
         : `${opening} je trouve qu'il ne rend pas justice à ce que vous faites.`;

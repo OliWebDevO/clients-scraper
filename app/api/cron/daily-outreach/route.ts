@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   await supabase.from("settings").update({ value: { ...config, last_run_date: day } }).eq("key", "daily_outreach");
 
   const [kbo, google] = await Promise.all([
-    selectKboCandidates(supabase, config.kbo_count),
+    selectKboCandidates(supabase, config.kbo_count, { analyzeSites: true }),
     selectGoogleCandidates(supabase, config.google_count, { lookupEmails: true }),
   ]);
 

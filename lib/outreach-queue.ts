@@ -99,6 +99,10 @@ export function correctionIsSafe(
     }
   }
   if (paragraphs(original.content) !== paragraphs(corrected.content)) return "l'IA a changé la structure des paragraphes";
+  const frenchSpacing = (s: string) => (s.match(/ [:?!]/g) || []).length;
+  if (frenchSpacing(corrected.content + corrected.subject) < frenchSpacing(original.content + original.subject)) {
+    return "l'IA a retiré une espace avant : ? ou !";
+  }
   const ratio = corrected.content.length / Math.max(1, original.content.length);
   if (ratio < 0.8 || ratio > 1.25) return "l'IA a trop réécrit le texte";
   if (!corrected.subject || corrected.subject.length > 90) return "sujet corrigé invalide";
