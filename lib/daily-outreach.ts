@@ -4,6 +4,7 @@
  * - Google Maps: no real website or an outdated one, email on the business' own domain (generic address),
  *   ranked by the reply rate of their sector, then rating and number of reviews
  */
+import { lookup } from "node:dns/promises";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlatform, getWebsiteProfile, GOOD_WEBSITE_SCORE } from "./prospect";
 import { analyzeWebsite, pickEmail } from "./website-analyzer";
@@ -50,6 +51,7 @@ export function isFrenchSpeakingArea(address: string | null): boolean {
 const KBO_MAX_AGE_DAYS = 365; // "félicitations pour le lancement" stays true for a year
 const EMAIL_LOOKUPS_PER_RUN = 15;
 const SITE_ANALYSES_PER_RUN = 40; // fresh analysis of each candidate's site at send time
+const SITE_PROBES_PER_RUN = 60; // KBO companies without a known site: look for one before saying "get a site"
 
 /**
  * Analyse a site now (not the possibly months-old result from the scrape) and save it.
@@ -67,6 +69,27 @@ async function freshAnalysis(supabase: SupabaseClient, b: Candidate): Promise<bo
   }
   await supabase.from("businesses").update(update).eq("id", b.id);
   return true;
+}
+
+/**
+ * What a domain serves: "none" = no web address at all, "placeholder" = parked / coming soon,
+ * "site" = a real site, "unknown" = resolves but can't be read today (treated as a possible site).
+ */
+export async function probeDomain(domain: string): Promise<{ state: "site"; url: string } | { state: "none" | "placeholder" | "unknown" }> {
+  if (!domain) return { state: "none" };
+  const resolves = async (host: string) => lookup(host).then(() => true, () => false);
+  if (!(await resolves(domain)) && !(await resolves(`www.${domain}`))) return { state: "none" };
+  const site = (await analyzeWebsite(domain)) ?? (await analyzeWebsite(`www.${domain}`));
+  if (!site) return { state: "unknown" };
+  return site.placeholder ? { state: "placeholder" } : { state: "site", url: site.url };
+}
+
+const LEGAL_FORMS = /\b(srl|sprl|sa|sc|scs|snc|scrl|asbl|bv|nv|vzw|bvba|comm\.?\s?v)\b\.?/gi;
+
+/** "Ryutherm SRL" → ryutherm.be, ryutherm.com */
+export function guessedDomains(name: string): string[] {
+  const base = normalize(name.replace(LEGAL_FORMS, ""));
+  return base.length >= 4 ? [`${base}.be`, `${base}.com`] : [];
 }
 
 const FREE_MAILBOX = /^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|icloud|me|aol|gmx|proton|protonmail|skynet|telenet|proximus|scarlet|voo|orange)\./i;
@@ -167,19 +190,36 @@ export async function selectKboCandidates(
   // Analyse it first; a good site or an unreachable one is skipped.
   const picked: Candidate[] = [];
   let analysed = 0;
+  let probes = 0;
   for (const b of pool) {
     if (picked.length >= limit) break;
-    if (!b.website_url && analyzeSites && analysed < SITE_ANALYSES_PER_RUN) {
-      // The KBO lists no website, but contact@company.be often has one: never tell them "it's time to get a site"
-      const domain = b.email!.split("@")[1]?.toLowerCase();
-      if (domain && !FREE_MAILBOX.test(domain)) {
-        analysed++;
-        const site = await analyzeWebsite(domain);
-        if (site && !site.placeholder) {
-          b.website_url = site.url;
+    if (!b.website_url && analyzeSites) {
+      // The KBO lists no website, but the company may well have one: never tell them "it's time to get a site".
+      // In doubt (probe budget used up, site unreachable today), the company is skipped.
+      if (probes >= SITE_PROBES_PER_RUN) continue;
+      const domain = b.email!.split("@")[1]?.toLowerCase() ?? "";
+      if (!FREE_MAILBOX.test(domain)) {
+        // contact@company.be: look at what company.be serves
+        probes++;
+        const probe = await probeDomain(domain);
+        if (probe.state === "unknown") continue;
+        if (probe.state === "site") {
+          b.website_url = probe.url;
           b.has_website = true;
-          await supabase.from("businesses").update({ website_url: site.url, has_website: true }).eq("id", b.id);
+          await supabase.from("businesses").update({ website_url: probe.url, has_website: true }).eq("id", b.id);
         }
+      } else {
+        // company@gmail.com: try the obvious domains of its name; anything that looks like a site → skip
+        let maybeSite = false;
+        for (const guess of guessedDomains(b.name)) {
+          probes++;
+          const { state } = await probeDomain(guess);
+          if (state === "site" || state === "unknown") {
+            maybeSite = true;
+            break;
+          }
+        }
+        if (maybeSite) continue;
       }
     }
     const realSite = !!b.website_url && !getPlatform(b.website_url);
