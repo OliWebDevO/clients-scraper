@@ -162,7 +162,7 @@ await eachRow("contact.csv", (r) => {
 
 /* ── Build rows ── */
 const rows = [...addressOf.keys()]
-  .filter((ent) => nameOf.has(ent))
+  .filter((ent) => nameOf.has(ent) && /\p{L}/u.test(nameOf.get(ent).name)) // registered under its number only: no name to address
   .sort((a, b) => enterprises.get(b).start.localeCompare(enterprises.get(a).start))
   .slice(0, limit)
   .map((ent) => {

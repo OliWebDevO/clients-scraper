@@ -349,7 +349,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
     case "ok": {
       const ideas = plainIssues(data.websiteIssues);
       const domain = websiteDomain(data.websiteUrl) ?? "votre site";
-      const visit = question ? `Aujourd'hui, il tombe sur ${domain}, une bonne base.` : `En visitant ${domain},`;
+      const visit = question ? `Aujourd'hui, il tombe sur ${domain}, qui est déjà une bonne base.` : `En visitant ${domain},`;
       gap = ideas.length
         ? question
           ? `${visit} J'y vois ${ideas.length > 1 ? "quelques pistes" : "une piste simple"} pour qu'il vous apporte encore plus de clients : ${joinIdeas(ideas)}.`
@@ -380,8 +380,8 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
   // 4. Offer, 5. one low-friction call to action
   const offer =
     profile === "outdated" || profile === "ok"
-      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit élégant, adapté au mobile, et bien positionné sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`
-      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : élégants, adaptés au mobile, et bien positionnés sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`;
+      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit élégant, adapté au mobile et bien positionné sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`
+      : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : élégants, adaptés au mobile et bien positionnés sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`;
   // An honest, low-pressure ask: no promise of a ready-made mock-up
   const cta = `Si l'idée vous parle, je serais ravi d'en discuter avec vous lors d'un court appel ou autour d'un café, sans engagement.`;
 

@@ -169,6 +169,19 @@ export async function selectKboCandidates(
   let analysed = 0;
   for (const b of pool) {
     if (picked.length >= limit) break;
+    if (!b.website_url && analyzeSites && analysed < SITE_ANALYSES_PER_RUN) {
+      // The KBO lists no website, but contact@company.be often has one: never tell them "it's time to get a site"
+      const domain = b.email!.split("@")[1]?.toLowerCase();
+      if (domain && !FREE_MAILBOX.test(domain)) {
+        analysed++;
+        const site = await analyzeWebsite(domain);
+        if (site && !site.placeholder) {
+          b.website_url = site.url;
+          b.has_website = true;
+          await supabase.from("businesses").update({ website_url: site.url, has_website: true }).eq("id", b.id);
+        }
+      }
+    }
     const realSite = !!b.website_url && !getPlatform(b.website_url);
     if (realSite) {
       if (analyzeSites) {

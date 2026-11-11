@@ -34,6 +34,7 @@ export function checkEmail(input: {
   const leftover = all.match(/\{\{\s*\w+\s*\}\}/);
   if (leftover) errors.push(`Variable non remplacée : ${leftover[0]}`);
   if (/\b(undefined|null|NaN|\[object Object\])\b/.test(all)) errors.push("Le texte contient « undefined », « null » ou « NaN ».");
+  if (input.businessName && !/\p{L}/u.test(input.businessName)) errors.push("Le nom de l'entreprise ne contient aucune lettre (numéro d'entreprise ?).");
   if (STREET_AS_CITY.test(text)) errors.push("Une adresse de rue apparaît à la place de la ville.");
 
   // ── Warnings ──
@@ -47,7 +48,7 @@ export function checkEmail(input: {
   if (words > 220) warnings.push(`Message long (${words} mots) : un premier contact efficace fait moins de 150 mots.`);
   const links = (text.match(/https?:\/\//g) || []).length;
   if (links > 2) warnings.push(`${links} liens : plus de 2 liens nuit à la délivrabilité.`);
-  if (input.businessName && input.businessName.length > 4 && input.businessName === input.businessName.toUpperCase() && text.includes(input.businessName)) {
+  if (input.businessName && /\p{L}/u.test(input.businessName) && input.businessName.length > 4 && input.businessName === input.businessName.toUpperCase() && text.includes(input.businessName)) {
     warnings.push("Le nom de l'entreprise est en MAJUSCULES : écrivez-le normalement.");
   }
   if (input.recipientEmail && PERSONAL_DOMAINS.test(input.recipientEmail)) {

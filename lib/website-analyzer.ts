@@ -24,6 +24,7 @@ export interface WebsiteAnalysis {
   };
   issues: string[];
   emails: string[]; // contact addresses found on the homepage or contact page
+  placeholder: boolean; // parked domain, hosting default page or "coming soon": no real site yet
 }
 
 const EMAIL_REGEX = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
@@ -194,6 +195,10 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
 
     const html = await response.text();
     const $ = cheerio.load(html);
+    const visibleText = $("body").clone().find("script, style, noscript").remove().end().text().replace(/\s+/g, " ").trim();
+    const placeholder =
+      visibleText.length < 200 ||
+      /\b(domain (?:is )?(?:for sale|parked)|parked (?:free|domain)|coming soon|under construction|en construction|bientôt (?:disponible|en ligne)|site en cours de|binnenkort|this domain|ce domaine|default (?:web )?page|welcome to nginx|it works!)/i.test(visibleText);
 
     // Contact emails: homepage first, then the contact page
     emails = extractEmails($, html);
@@ -333,6 +338,7 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
       checks,
       issues,
       emails,
+      placeholder,
     };
   } catch (error) {
     console.error(`Erreur analyse ${url}:`, error);
