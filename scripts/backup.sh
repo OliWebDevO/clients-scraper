@@ -33,6 +33,7 @@ KEEP_DAYS="${KEEP_DAYS:-7}"
 NAME="$(date +%F_%H%M)"
 DEST="$BACKUP_ROOT/$NAME"
 mkdir -p "$DEST"
+trap 'rm -rf "$DEST"' EXIT  # pas de dossier incomplet si une étape échoue
 
 echo "$(date '+%F %T') Début de la sauvegarde"
 
