@@ -25,6 +25,7 @@ export interface WebsiteAnalysis {
   issues: string[];
   emails: string[]; // contact addresses found on the homepage or contact page
   placeholder: boolean; // parked domain, hosting default page or "coming soon": no real site yet
+  dutchOnly: boolean; // <html lang="nl"> and no link to a French version
 }
 
 const EMAIL_REGEX = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
@@ -196,9 +197,15 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
     const html = await response.text();
     const $ = cheerio.load(html);
     const visibleText = $("body").clone().find("script, style, noscript").remove().end().text().replace(/\s+/g, " ").trim();
+    // The keywords only count on a short page: a real site may announce "Season 2027 coming soon"
     const placeholder =
       visibleText.length < 200 ||
-      /\b(domain (?:is )?(?:for sale|parked)|parked (?:free|domain)|coming soon|under construction|en construction|bientôt (?:disponible|en ligne)|site en cours de|binnenkort|this domain|ce domaine|default (?:web )?page|welcome to nginx|it works!)/i.test(visibleText);
+      (visibleText.length < 1500 &&
+        /\b(domain (?:is )?(?:for sale|parked)|parked (?:free|domain)|coming soon|under construction|en construction|bientôt (?:disponible|en ligne)|site en cours de|binnenkort|this domain|ce domaine|default (?:web )?page|welcome to nginx|it works!)/i.test(visibleText));
+    // Site in Dutch with no French version: we only write in French
+    const dutchOnly =
+      /^nl\b/i.test($("html").attr("lang") || "") &&
+      $('[hreflang^="fr"], a[href*="/fr/"], a[href$="/fr"]').length === 0;
 
     // Contact emails: homepage first, then the contact page
     emails = extractEmails($, html);
@@ -339,6 +346,7 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
       issues,
       emails,
       placeholder,
+      dutchOnly,
     };
   } catch (error) {
     console.error(`Erreur analyse ${url}:`, error);
