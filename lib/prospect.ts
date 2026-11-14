@@ -229,6 +229,7 @@ export function cleanBusinessName(name: string, city?: string | null): string {
     .replace(EMOJI, "")
     .replace(/\s{2,}/g, " ")
     .split(" | ")[0]
+    .split(" / ")[0] // "Vereecke / Christophe Boulangerie Pâtisserie Bakkerij Banket" → "Vereecke"
     .replace(/[\s,]+\(?(srl|sprl|sa|sc|scrl|snc|scs|asbl|bv|bvba|nv|cv|vof|vzw|comm\.?\s?v)\.?\)?$/i, "")
     .trim();
   const dash = cleaned.match(/^(.+?)\s+[-–—]\s+(.+)$/);
@@ -328,6 +329,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
   let gap: string;
   let cost: string;
   let subject: string;
+  let ideas: string[] = [];
   const deShowcase = /^[aeiouéèêh]/i.test(showcase) ? `d'${showcase}` : `de ${showcase}`;
   const DIFFERENCE = `C'est souvent ce qui fait la différence quand un client hésite entre deux adresses.`;
   switch (profile) {
@@ -347,7 +349,8 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
       break;
     case "outdated":
     case "ok": {
-      const ideas = plainIssues(data.websiteIssues);
+      // A company that just started: an "outdated content" idea would contradict the congratulations
+      ideas = plainIssues(fromKbo ? data.websiteIssues?.filter((i) => !/copyright/i.test(i)) : data.websiteIssues);
       const domain = websiteDomain(data.websiteUrl) ?? "votre site";
       const visit = question ? `Aujourd'hui, il tombe sur ${domain}, qui est déjà une bonne base.` : `En visitant ${domain},`;
       gap = ideas.length
@@ -380,7 +383,7 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
   // 4. Offer, 5. one low-friction call to action
   const offer =
     profile === "outdated" || profile === "ok"
-      ? `Je suis développeur web à Bruxelles : je peux moderniser votre site, en gardant votre contenu, pour qu'il soit élégant, adapté au mobile et bien positionné sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`
+      ? `Je suis développeur web à Bruxelles : je peux ${ideas.length === 1 ? "m'en occuper" : ideas.length ? "mettre en place ces améliorations" : "les mettre en place"}, ou aller plus loin en modernisant votre site tout en gardant votre contenu, pour qu'il soit élégant, adapté au mobile et bien positionné sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`
       : `Je suis développeur web à Bruxelles et je crée des sites sur mesure pour les commerces et indépendants : élégants, adaptés au mobile et bien positionnés sur Google. Une fois en ligne, votre site reste entièrement modulable : vous pourrez modifier vos textes, vos photos ou vos horaires en toute autonomie, sans connaissances techniques.`;
   // An honest, low-pressure ask: no promise of a ready-made mock-up
   const cta = `Si l'idée vous parle, je serais ravi d'en discuter avec vous lors d'un court appel ou autour d'un café, sans engagement.`;

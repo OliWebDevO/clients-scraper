@@ -60,6 +60,13 @@ const SITE_PROBES_PER_RUN = 60; // KBO companies without a known site: look for 
 async function freshAnalysis(supabase: SupabaseClient, b: Candidate): Promise<boolean> {
   const analysis = await analyzeWebsite(b.website_url!);
   if (!analysis || analysis.dutchOnly) return false;
+  if (analysis.placeholder) {
+    // Hosting default / "en construction" page: no real site, never critique it
+    b.website_url = null;
+    b.has_website = false;
+    await supabase.from("businesses").update({ website_url: null, has_website: false, website_score: null, website_issues: null }).eq("id", b.id);
+    return true;
+  }
   b.website_score = analysis.score;
   b.website_issues = analysis.issues;
   const update: Record<string, unknown> = { website_score: analysis.score, website_issues: analysis.issues };
@@ -232,7 +239,7 @@ export async function selectKboCandidates(
       } else if (b.website_score == null) {
         continue; // preview: never analysed yet → not counted
       }
-      if ((b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // their site is fine
+      if (b.website_url && (b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // their site is fine
     }
     picked.push(b);
   }
@@ -283,7 +290,7 @@ export async function selectGoogleCandidates(
       if (analysed >= SITE_ANALYSES_PER_RUN) continue;
       analysed++;
       if (!(await freshAnalysis(supabase, b))) continue; // unreachable or Dutch only
-      if ((b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // improved since the scrape: nothing to suggest
+      if (b.website_url && (b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // improved since the scrape: nothing to suggest
     }
     if (!b.email || optedOut.has(b.email.toLowerCase())) continue;
     if (!isBusinessAddress(b.email, b.name)) continue; // impersonal business address only
