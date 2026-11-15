@@ -115,12 +115,6 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
       return null;
     }
 
-    // Check HTTPS
-    checks.hasHttps = normalizedUrl.startsWith("https://");
-    if (!checks.hasHttps) {
-      issues.push("Pas de HTTPS - site non sécurisé");
-    }
-
     // Fetch the page with timeout and manual redirect handling
     const startTime = Date.now();
     const controller = new AbortController();
@@ -192,6 +186,12 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
 
     if (!response.ok) {
       return null;
+    }
+
+    // HTTPS: judged on the page actually served (http://site.be usually redirects to https://)
+    checks.hasHttps = (response.url || normalizedUrl).startsWith("https://");
+    if (!checks.hasHttps && !issues.some((i) => /https/i.test(i))) {
+      issues.push("Pas de HTTPS - site non sécurisé");
     }
 
     const html = await response.text();

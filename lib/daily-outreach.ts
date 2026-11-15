@@ -4,7 +4,7 @@
  * - Google Maps: no real website or an outdated one, email on the business' own domain (generic address),
  *   ranked by the reply rate of their sector, then rating and number of reviews
  */
-import { lookup } from "node:dns/promises";
+import { lookup, resolveMx } from "node:dns/promises";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPlatform, getWebsiteProfile, GOOD_WEBSITE_SCORE } from "./prospect";
 import { analyzeWebsite, pickEmail } from "./website-analyzer";
@@ -76,6 +76,16 @@ async function freshAnalysis(supabase: SupabaseClient, b: Candidate): Promise<bo
   }
   await supabase.from("businesses").update(update).eq("id", b.id);
   return true;
+}
+
+/**
+ * The address can receive mail: its domain has a mail server, and it isn't a data-entry slip
+ * like "renovahome01.com@renovahome01.com". A bounce hurts the sender reputation.
+ */
+export async function canReceiveMail(email: string): Promise<boolean> {
+  const [local = "", domain = ""] = email.toLowerCase().split("@");
+  if (!local || !domain || local === domain) return false;
+  return resolveMx(domain).then((mx) => mx.length > 0, () => false);
 }
 
 /**
@@ -241,6 +251,7 @@ export async function selectKboCandidates(
       }
       if (b.website_url && (b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // their site is fine
     }
+    if (!(await canReceiveMail(b.email!))) continue;
     picked.push(b);
   }
   return picked;
@@ -294,6 +305,7 @@ export async function selectGoogleCandidates(
     }
     if (!b.email || optedOut.has(b.email.toLowerCase())) continue;
     if (!isBusinessAddress(b.email, b.name)) continue; // impersonal business address only
+    if (!(await canReceiveMail(b.email!))) continue;
     picked.push(b);
   }
   return picked;
