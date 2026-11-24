@@ -243,7 +243,7 @@ export async function queuedBusinessIds(supabase: SupabaseClient, kind?: "first"
 
 /** Send one approved email, re-checking opt-outs at send time */
 export async function sendQueued(supabase: SupabaseClient, row: QueueRow): Promise<"sent" | "rejected" | "failed"> {
-  const recipient = row.recipient_email.toLowerCase();
+  const recipient = row.recipient_email.trim().toLowerCase();
   const [{ data: optOut }, { data: business }] = await Promise.all([
     supabase.from("email_optouts").select("email").eq("email", recipient).maybeSingle(),
     row.business_id

@@ -25,6 +25,7 @@ export interface WebsiteAnalysis {
   issues: string[];
   emails: string[]; // contact addresses found on the homepage or contact page
   placeholder: boolean; // parked domain, hosting default page or "coming soon": no real site yet
+  unreadable: boolean; // almost empty page that may be a real site (JavaScript, moved elsewhere): in doubt
   dutchOnly: boolean; // <html lang="nl"> and no link to a French version
 }
 
@@ -198,10 +199,24 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
     const $ = cheerio.load(html);
     const visibleText = $("body").clone().find("script, style, noscript").remove().end().text().replace(/\s+/g, " ").trim();
     // The keywords only count on a short page: a real site may announce "Season 2027 coming soon"
-    const placeholder =
-      visibleText.length < 200 ||
-      (visibleText.length < 1500 &&
-        /\b(domain (?:is )?(?:for sale|parked)|parked (?:free|domain)|coming soon|under construction|en construction|bientôt (?:disponible|en ligne)|site en cours de|binnenkort|this domain|ce domaine|default (?:web )?page|welcome to nginx|it works!)/i.test(visibleText));
+    const announcedPlaceholder =
+      visibleText.length < 1500 &&
+      /\b(domain (?:is )?(?:for sale|parked)|parked (?:free|domain)|coming soon|under construction|en construction|bientôt (?:disponible|en ligne)|site en cours de|binnenkort|this domain|ce domaine|default (?:web )?page|welcome to nginx|it works!|domain name has been|nom de domaine|parkpage|easyhost|combell|one\.com|hostinger|ovhcloud|gandi)/i.test(visibleText);
+    // An almost empty page may still be a real site: built in JavaScript, moved to another domain
+    // ("Timesty est devenu Tanto"), or linking to one. Then we can't tell: never email about it.
+    const bareHost = (u: string) => new URL(u).hostname.replace(/^www\./, "");
+    const ownHost = bareHost(normalizedUrl);
+    const elsewhere =
+      bareHost(response.url || normalizedUrl) !== ownHost ||
+      $("a[href^='http']").toArray().some((a) => {
+        try {
+          return bareHost($(a).attr("href")!) !== ownHost;
+        } catch {
+          return false;
+        }
+      });
+    const unreadable = visibleText.length < 200 && !announcedPlaceholder && (elsewhere || $("script[src]").length > 0);
+    const placeholder = announcedPlaceholder || (visibleText.length < 200 && !unreadable);
     // Site in Dutch with no French version: we only write in French
     const dutchOnly =
       /^nl\b/i.test($("html").attr("lang") || "") &&
@@ -346,6 +361,7 @@ export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis | nul
       issues,
       emails,
       placeholder,
+      unreadable,
       dutchOnly,
     };
   } catch (error) {

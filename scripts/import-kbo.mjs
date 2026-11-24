@@ -122,7 +122,8 @@ console.log(`• ${activityOf.size} in the target sectors`);
 const addressOf = new Map(); // enterprise → "Street 12, 1050 Ixelles" (establishment address preferred)
 await eachRow("address.csv", (r) => {
   const ent = entOf(r.EntityNumber);
-  if (!ent || !activityOf.has(ent) || r.DateStrikingOff || !zipAllowed(r.Zipcode)) return;
+  // Country is only filled for foreign addresses ("1370 Logatec", Slovenia, has an allowed postcode too)
+  if (!ent || !activityOf.has(ent) || r.DateStrikingOff || r.CountryFR || r.CountryNL || !zipAllowed(r.Zipcode)) return;
   const street = [r.StreetFR || r.StreetNL, r.HouseNumber].filter(Boolean).join(" ") + (r.Box ? ` bte ${r.Box}` : "");
   const address = `${street}, ${r.Zipcode} ${r.MunicipalityFR || r.MunicipalityNL}`;
   if (!addressOf.has(ent) || r.EntityNumber !== ent) addressOf.set(ent, address);
@@ -155,7 +156,7 @@ await eachRow("contact.csv", (r) => {
   if (!ent || !addressOf.has(ent)) return;
   const c = contactOf.get(ent) || {};
   if (r.ContactType === "TEL" && !c.phone) c.phone = r.Value;
-  if (r.ContactType === "EMAIL" && !c.email) c.email = r.Value.toLowerCase();
+  if (r.ContactType === "EMAIL" && !c.email) c.email = r.Value.trim().toLowerCase();
   if (r.ContactType === "WEB" && !c.web) c.web = /^https?:\/\//i.test(r.Value) ? r.Value : `https://${r.Value}`;
   contactOf.set(ent, c);
 });

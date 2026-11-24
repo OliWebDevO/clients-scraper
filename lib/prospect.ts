@@ -258,6 +258,9 @@ export function withArticle(name: string, preposition?: "de"): string {
   if (FEMININE_NOUNS.test(name)) article = vowel ? "l'" : "la ";
   else if (MASCULINE_NOUNS.test(name)) article = vowel ? "l'" : "le ";
   if (preposition !== "de") return `${article}${name}`;
+  // The name starts with its own article: "du Village", "des Apéros Villersois", not "de Le Village"
+  const own = name.match(/^(le|les)\s+(.+)$/i);
+  if (own) return `${own[1].toLowerCase() === "le" ? "du" : "des"} ${own[2]}`;
   if (article === "le ") return `du ${name}`;
   if (article) return `de ${article}${name}`;
   // No elision before a consonant-sounding Y ("de Yuka Coffee Bar")

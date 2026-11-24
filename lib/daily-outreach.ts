@@ -48,6 +48,25 @@ export function isFrenchSpeakingArea(address: string | null): boolean {
   return postcode >= 1000 && postcode <= 1499;
 }
 
+// KBO addresses end with the municipality. Foreign seats have 4-digit postcodes too ("1370 Logatec", Slovenia).
+const AREA_MUNICIPALITIES = new Set(
+  [
+    "Anderlecht", "Auderghem", "Berchem-Sainte-Agathe", "Bruxelles", "Etterbeek", "Evere", "Forest", "Ganshoren",
+    "Ixelles", "Jette", "Koekelberg", "Molenbeek-Saint-Jean", "Saint-Gilles", "Saint-Josse-ten-Noode", "Schaerbeek",
+    "Uccle", "Watermael-Boitsfort", "Woluwe-Saint-Lambert", "Woluwe-Saint-Pierre",
+    "Beauvechain", "Braine-l'Alleud", "Braine-le-Château", "Chastre", "Chaumont-Gistoux", "Court-Saint-Etienne",
+    "Genappe", "Grez-Doiceau", "Hélécine", "Incourt", "Ittre", "Jodoigne", "La Hulpe", "Lasne", "Mont-Saint-Guibert",
+    "Nivelles", "Orp-Jauche", "Ottignies-Louvain-la-Neuve", "Perwez", "Ramillies", "Rebecq", "Rixensart", "Tubize",
+    "Villers-la-Ville", "Walhain", "Waterloo", "Wavre",
+  ].map((m) => m.toLowerCase())
+);
+
+/** KBO company seated in a Brussels or Walloon Brabant municipality (not merely a 1000-1499 postcode abroad) */
+export function isAreaMunicipality(address: string | null): boolean {
+  const municipality = address?.match(/\b\d{4}\s+([^\d,]+?)\s*$/)?.[1];
+  return !!municipality && AREA_MUNICIPALITIES.has(municipality.toLowerCase().replace("étienne", "etienne"));
+}
+
 const KBO_MAX_AGE_DAYS = 365; // "félicitations pour le lancement" stays true for a year
 const EMAIL_LOOKUPS_PER_RUN = 15;
 const SITE_ANALYSES_PER_RUN = 40; // fresh analysis of each candidate's site at send time
@@ -59,7 +78,7 @@ const SITE_PROBES_PER_RUN = 60; // KBO companies without a known site: look for 
  */
 async function freshAnalysis(supabase: SupabaseClient, b: Candidate): Promise<boolean> {
   const analysis = await analyzeWebsite(b.website_url!);
-  if (!analysis || analysis.dutchOnly) return false;
+  if (!analysis || analysis.dutchOnly || analysis.unreadable) return false;
   if (analysis.placeholder) {
     // Hosting default / "en construction" page: no real site, never critique it
     b.website_url = null;
@@ -83,9 +102,13 @@ async function freshAnalysis(supabase: SupabaseClient, b: Candidate): Promise<bo
  * like "renovahome01.com@renovahome01.com". A bounce hurts the sender reputation.
  */
 export async function canReceiveMail(email: string): Promise<boolean> {
-  const [local = "", domain = ""] = email.toLowerCase().split("@");
+  const [local = "", domain = ""] = email.trim().toLowerCase().split("@");
   if (!local || !domain || local === domain) return false;
-  return resolveMx(domain).then((mx) => mx.length > 0, () => false);
+  // "Null MX" ("." or localhost, e.g. gamail.com, a typo of gmail.com): the domain accepts no mail
+  return resolveMx(domain).then(
+    (mx) => mx.some(({ exchange }) => exchange !== "" && exchange !== "." && exchange.toLowerCase() !== "localhost"),
+    () => false
+  );
 }
 
 /**
@@ -97,7 +120,7 @@ export async function probeDomain(domain: string): Promise<{ state: "site"; url:
   const resolves = async (host: string) => lookup(host).then(() => true, () => false);
   if (!(await resolves(domain)) && !(await resolves(`www.${domain}`))) return { state: "none" };
   const site = (await analyzeWebsite(domain)) ?? (await analyzeWebsite(`www.${domain}`));
-  if (!site) return { state: "unknown" };
+  if (!site || site.unreadable) return { state: "unknown" };
   return site.placeholder ? { state: "placeholder" } : { state: "site", url: site.url };
 }
 
@@ -201,7 +224,7 @@ export async function selectKboCandidates(
   const { contacted, optedOut } = await excludedIds(supabase);
   const pool = ((data || []) as Candidate[])
     .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()))
-    .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address));
+    .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address) && isAreaMunicipality(b.address));
 
   // A KBO company that already has a website: never criticise it without evidence.
   // Analyse it first; a good site or an unreachable one is skipped.

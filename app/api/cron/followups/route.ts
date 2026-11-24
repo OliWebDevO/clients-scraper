@@ -11,6 +11,7 @@ import {
 } from "@/lib/outreach";
 import { queueEmail, queuedBusinessIds, autoCorrectAndSend } from "@/lib/outreach-queue";
 import { DEFAULT_DAILY_SETTINGS, type DailyOutreachSettings } from "@/lib/daily-outreach";
+import { getResendClient } from "@/lib/resend";
 
 export const maxDuration = 300;
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   // First emails old enough to follow up on
   const { data: firsts, error } = await supabase
     .from("sent_emails")
-    .select("business_id, recipient_email, subject, body, sent_at")
+    .select("business_id, recipient_email, subject, body, sent_at, resend_id")
     .eq("kind", "first")
     .eq("status", "sent")
     .not("business_id", "is", null)
@@ -79,6 +80,14 @@ export async function GET(request: NextRequest) {
     const business = businessById.get(businessId);
     if (!business || business.replied || business.do_not_contact) continue;
     if (alreadyFollowed.has(businessId) || queuedFollowups.has(businessId) || optedOut.has(first.recipient_email)) continue;
+    // The first email bounced or was reported as spam: never write to this address again
+    if (first.resend_id) {
+      const { data: delivery } = await getResendClient().emails.get(first.resend_id);
+      if (delivery?.last_event === "bounced" || delivery?.last_event === "complained") {
+        await supabase.from("businesses").update({ do_not_contact: true }).eq("id", businessId);
+        continue;
+      }
+    }
 
     const { subject, body } = generateFollowUpEmail({
       businessName: business.name,
