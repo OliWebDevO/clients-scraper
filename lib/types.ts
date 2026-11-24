@@ -72,6 +72,7 @@ export interface ScheduleConfig {
   radius?: number;
   min_rating?: number;
   categories?: string[];
+  rotate?: boolean; // one new trade × municipality search per run (see GOOGLE_ROTATION_TRADES)
   // For jobs
   platforms?: string[];
   keywords?: string[];

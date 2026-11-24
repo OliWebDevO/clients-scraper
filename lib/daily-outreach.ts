@@ -49,8 +49,7 @@ export function isFrenchSpeakingArea(address: string | null): boolean {
 }
 
 // KBO addresses end with the municipality. Foreign seats have 4-digit postcodes too ("1370 Logatec", Slovenia).
-const AREA_MUNICIPALITIES = new Set(
-  [
+export const AREA_MUNICIPALITY_NAMES = [
     "Anderlecht", "Auderghem", "Berchem-Sainte-Agathe", "Bruxelles", "Etterbeek", "Evere", "Forest", "Ganshoren",
     "Ixelles", "Jette", "Koekelberg", "Molenbeek-Saint-Jean", "Saint-Gilles", "Saint-Josse-ten-Noode", "Schaerbeek",
     "Uccle", "Watermael-Boitsfort", "Woluwe-Saint-Lambert", "Woluwe-Saint-Pierre",
@@ -58,8 +57,27 @@ const AREA_MUNICIPALITIES = new Set(
     "Genappe", "Grez-Doiceau", "Hélécine", "Incourt", "Ittre", "Jodoigne", "La Hulpe", "Lasne", "Mont-Saint-Guibert",
     "Nivelles", "Orp-Jauche", "Ottignies-Louvain-la-Neuve", "Perwez", "Ramillies", "Rebecq", "Rixensart", "Tubize",
     "Villers-la-Ville", "Walhain", "Waterloo", "Wavre",
-  ].map((m) => m.toLowerCase())
-);
+];
+const AREA_MUNICIPALITIES = new Set(AREA_MUNICIPALITY_NAMES.map((m) => m.toLowerCase()));
+
+/**
+ * Google Maps searches, one pair per day: trades that can pay for a site and really need their own
+ * (not physios on Doctoranytime, not hairdressers with small budgets).
+ */
+export const GOOGLE_ROTATION_TRADES = [
+  "restaurant", "bar", "café", "traiteur", "plombier", "électricien", "chauffagiste", "couvreur",
+  "menuisier", "entreprise de rénovation", "carreleur", "peintre en bâtiment", "serrurier", "garage automobile",
+];
+
+/** Day n: each trade in turn, the municipality changes once all trades have been searched */
+export function googleRotationSearch(date = new Date()): { category: string; location: string } {
+  const day = Math.floor(date.getTime() / 86400000);
+  const trades = GOOGLE_ROTATION_TRADES.length;
+  return {
+    category: GOOGLE_ROTATION_TRADES[day % trades],
+    location: `${AREA_MUNICIPALITY_NAMES[Math.floor(day / trades) % AREA_MUNICIPALITY_NAMES.length]}, Belgique`,
+  };
+}
 
 /** KBO company seated in a Brussels or Walloon Brabant municipality (not merely a 1000-1499 postcode abroad) */
 export function isAreaMunicipality(address: string | null): boolean {

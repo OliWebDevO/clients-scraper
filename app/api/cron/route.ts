@@ -4,6 +4,7 @@ import { getScraperForPlatform } from "@/lib/scrapers";
 import { scrapeGoogleMapsWithProgress, businessToRow } from "@/lib/scrapers/google-maps-stream";
 import type { ScrapeSchedule, JobPlatform } from "@/lib/types";
 import { verifyCronSecret } from "@/lib/cron-auth";
+import { googleRotationSearch } from "@/lib/daily-outreach";
 
 export const maxDuration = 300;
 
@@ -103,12 +104,15 @@ export async function GET(request: NextRequest) {
             }
           }
         } else if (schedule.type === "businesses") {
-          // Run business scraper
+          // Run business scraper. "rotate": a new trade × municipality each day, otherwise the
+          // same search keeps returning the businesses already in the database.
+          const rotation = schedule.config.rotate ? googleRotationSearch() : null;
           const result = await scrapeGoogleMapsWithProgress({
-            location: schedule.config.location || "Belgium",
+            location: rotation?.location || schedule.config.location || "Belgium",
             radius: schedule.config.radius || 10,
             minRating: schedule.config.min_rating || 0,
-            categories: schedule.config.categories,
+            categories: rotation ? [rotation.category] : schedule.config.categories,
+            maxResults: rotation ? 20 : undefined,
           }, () => {});
 
           const bizBuffer: Record<string, unknown>[] = [];
