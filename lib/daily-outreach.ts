@@ -69,14 +69,29 @@ export const GOOGLE_ROTATION_TRADES = [
   "menuisier", "entreprise de rénovation", "carreleur", "peintre en bâtiment", "serrurier", "garage automobile",
 ];
 
-/** Day n: each trade in turn, the municipality changes once all trades have been searched */
-export function googleRotationSearch(date = new Date()): { category: string; location: string } {
-  const day = Math.floor(date.getTime() / 86400000);
+/** Search n of the rotation: each trade in turn, then the next municipality */
+export function googleRotationSearch(index: number): { category: string; location: string } {
   const trades = GOOGLE_ROTATION_TRADES.length;
   return {
-    category: GOOGLE_ROTATION_TRADES[day % trades],
-    location: `${AREA_MUNICIPALITY_NAMES[Math.floor(day / trades) % AREA_MUNICIPALITY_NAMES.length]}, Belgique`,
+    category: GOOGLE_ROTATION_TRADES[index % trades],
+    location: `${AREA_MUNICIPALITY_NAMES[Math.floor(index / trades) % AREA_MUNICIPALITY_NAMES.length]}, Belgique`,
   };
+}
+
+/** A freshly scraped Google business the daily send could email: same rules as selectGoogleCandidates */
+export async function isContactableGoogleRow(row: {
+  name: string;
+  address: string | null;
+  email: string | null;
+  rating: number | null;
+  has_website: boolean;
+  website_url: string | null;
+  website_score: number | null;
+}): Promise<boolean> {
+  if (!row.email || row.rating == null || !isFrenchSpeakingArea(row.address)) return false;
+  const profile = getWebsiteProfile({ hasWebsite: row.has_website, websiteUrl: row.website_url, websiteScore: row.website_score });
+  if (profile === "ok") return false; // their site is fine: nothing to offer
+  return isBusinessAddress(row.email, row.name) && (await canReceiveMail(row.email));
 }
 
 /** KBO company seated in a Brussels or Walloon Brabant municipality (not merely a 1000-1499 postcode abroad) */

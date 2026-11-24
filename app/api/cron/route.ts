@@ -4,7 +4,8 @@ import { getScraperForPlatform } from "@/lib/scrapers";
 import { scrapeGoogleMapsWithProgress, businessToRow } from "@/lib/scrapers/google-maps-stream";
 import type { ScrapeSchedule, JobPlatform } from "@/lib/types";
 import { verifyCronSecret } from "@/lib/cron-auth";
-import { googleRotationSearch } from "@/lib/daily-outreach";
+import { googleRotationSearch, isContactableGoogleRow } from "@/lib/daily-outreach";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const maxDuration = 300;
 
@@ -104,33 +105,18 @@ export async function GET(request: NextRequest) {
             }
           }
         } else if (schedule.type === "businesses") {
-          // Run business scraper. "rotate": a new trade × municipality each day, otherwise the
-          // same search keeps returning the businesses already in the database.
-          const rotation = schedule.config.rotate ? googleRotationSearch() : null;
-          const result = await scrapeGoogleMapsWithProgress({
-            location: rotation?.location || schedule.config.location || "Belgium",
-            radius: schedule.config.radius || 10,
-            minRating: schedule.config.min_rating || 0,
-            categories: rotation ? [rotation.category] : schedule.config.categories,
-            maxResults: rotation ? 20 : undefined,
-          }, () => {});
-
-          const bizBuffer: Record<string, unknown>[] = [];
-          for (const business of result.businesses) {
-            if (!business.name) continue;
-
-            bizBuffer.push(businessToRow(business));
-
-            if (bizBuffer.length >= 25) {
-              const { error: insertError } = await supabase.from("businesses").upsert(bizBuffer, { onConflict: "name,address" });
-              if (!insertError) itemsFound += bizBuffer.length;
-              bizBuffer.length = 0;
-            }
-          }
-
-          if (bizBuffer.length > 0) {
-            const { error: insertError } = await supabase.from("businesses").upsert(bizBuffer, { onConflict: "name,address" });
-            if (!insertError) itemsFound += bizBuffer.length;
+          if (schedule.config.rotate) {
+            // Claim today's run first: the searches can outlast the next hourly call
+            await supabase.from("scrape_schedules").update({ next_run_at: calculateNextRun(schedule) }).eq("id", schedule.id);
+            itemsFound = await runGoogleRotation(supabase, schedule);
+          } else {
+            const result = await scrapeGoogleMapsWithProgress({
+              location: schedule.config.location || "Belgium",
+              radius: schedule.config.radius || 10,
+              minRating: schedule.config.min_rating || 0,
+              categories: schedule.config.categories,
+            }, () => {});
+            itemsFound = await saveBusinesses(supabase, result.businesses.filter((b) => b.name).map((b) => businessToRow(b)));
           }
         }
 
@@ -207,4 +193,52 @@ function calculateNextRun(schedule: ScrapeSchedule): string {
   }
 
   return next.toISOString();
+}
+
+async function saveBusinesses(supabase: SupabaseClient, rows: Record<string, unknown>[]): Promise<number> {
+  let saved = 0;
+  for (let i = 0; i < rows.length; i += 25) {
+    const batch = rows.slice(i, i + 25);
+    const { error } = await supabase.from("businesses").upsert(batch, { onConflict: "name,address" });
+    if (!error) saved += batch.length;
+  }
+  return saved;
+}
+
+const GOOGLE_CONTACTABLE_PER_DAY = 3; // businesses with an email the daily send can use
+const GOOGLE_MAX_SEARCHES = 15;
+const GOOGLE_MAX_MINUTES = 40;
+
+/**
+ * Trade × municipality searches, one after the other, until the day's searches found
+ * GOOGLE_CONTACTABLE_PER_DAY new businesses with a usable email (or the search/time budget runs out).
+ * Businesses already in the database are skipped, so their data (emails found later) is never overwritten.
+ */
+async function runGoogleRotation(supabase: SupabaseClient, schedule: ScrapeSchedule): Promise<number> {
+  const { data: known } = await supabase.from("businesses").select("name, address").eq("source", "google_maps").limit(20000);
+  const existing = (known || []) as Array<{ name: string; address: string | null }>;
+  const deadline = Date.now() + GOOGLE_MAX_MINUTES * 60000;
+  let index = schedule.config.rotation_index ?? 0;
+  let saved = 0;
+  let contactable = 0;
+  for (let searches = 0; searches < GOOGLE_MAX_SEARCHES && contactable < GOOGLE_CONTACTABLE_PER_DAY && Date.now() < deadline; searches++) {
+    const { category, location } = googleRotationSearch(index++);
+    try {
+      const result = await scrapeGoogleMapsWithProgress(
+        { location, radius: 10, minRating: 0, categories: [category], maxResults: 20, excludeExisting: existing },
+        () => {}
+      );
+      const rows = result.businesses.filter((b) => b.name).map((b) => businessToRow(b, `${category} · ${location}`));
+      saved += await saveBusinesses(supabase, rows);
+      for (const row of rows) {
+        existing.push({ name: row.name as string, address: (row.address as string | null) ?? null });
+        if (await isContactableGoogleRow(row as Parameters<typeof isContactableGoogleRow>[0])) contactable++;
+      }
+      console.log(`Google rotation: ${category} · ${location} → ${rows.length} new, ${contactable}/${GOOGLE_CONTACTABLE_PER_DAY} contactable`);
+    } catch (err) {
+      console.error(`Google rotation failed on ${category} · ${location}:`, err);
+    }
+    await supabase.from("scrape_schedules").update({ config: { ...schedule.config, rotation_index: index } }).eq("id", schedule.id);
+  }
+  return saved;
 }
