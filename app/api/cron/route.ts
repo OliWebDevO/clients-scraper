@@ -4,7 +4,7 @@ import { getScraperForPlatform } from "@/lib/scrapers";
 import { scrapeGoogleMapsWithProgress, businessToRow } from "@/lib/scrapers/google-maps-stream";
 import type { ScrapeSchedule, JobPlatform } from "@/lib/types";
 import { verifyCronSecret } from "@/lib/cron-auth";
-import { googleRotationSearch, isContactableGoogleRow } from "@/lib/daily-outreach";
+import { googleRotationSearch, isContactableGoogleRow, kboEmail } from "@/lib/daily-outreach";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const maxDuration = 300;
@@ -229,6 +229,10 @@ async function runGoogleRotation(supabase: SupabaseClient, schedule: ScrapeSched
         () => {}
       );
       const rows = result.businesses.filter((b) => b.name).map((b) => businessToRow(b, `${category} · ${location}`));
+      // No email found on a website (or no website): the KBO may have the company's
+      for (const row of rows) {
+        if (!row.email) row.email = await kboEmail(supabase, row.name as string, (row.address as string | null) ?? null);
+      }
       saved += await saveBusinesses(supabase, rows);
       for (const row of rows) {
         existing.push({ name: row.name as string, address: (row.address as string | null) ?? null });

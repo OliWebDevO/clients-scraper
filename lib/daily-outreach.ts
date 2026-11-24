@@ -159,6 +159,23 @@ export async function probeDomain(domain: string): Promise<{ state: "site"; url:
 
 const LEGAL_FORMS = /\b(srl|sprl|sa|sc|scs|snc|scrl|asbl|bv|nv|vzw|bvba|comm\.?\s?v)\b\.?/gi;
 
+/** Key of the kbo_contacts lookup. Must match nameKey() in scripts/import-kbo.mjs */
+export function kboNameKey(name: string): string {
+  return normalize(name.replace(LEGAL_FORMS, ""));
+}
+
+/**
+ * Email of a business without a website, from the KBO data (active companies only, exact name + postcode).
+ * Null when not found, or when the name is shared by several companies there.
+ */
+export async function kboEmail(supabase: SupabaseClient, name: string, address: string | null): Promise<string | null> {
+  const postcode = address?.match(/\b(\d{4})\s+[^\d,]+(?:,\s*(?:Belgique|Belgium|België))?\s*$/i)?.[1];
+  const key = kboNameKey(name);
+  if (!postcode || key.length < 4) return null;
+  const { data } = await supabase.from("kbo_contacts").select("email").eq("postcode", postcode).eq("name_key", key).maybeSingle();
+  return data?.email ?? null;
+}
+
 /** "Ryutherm SRL" → ryutherm.be, ryutherm.com */
 export function guessedDomains(name: string): string[] {
   const base = normalize(name.replace(LEGAL_FORMS, ""));

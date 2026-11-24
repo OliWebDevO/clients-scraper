@@ -12,6 +12,10 @@
 //   --keywords=coiffure,restauration   match on the French NACE description of the main activity
 //   --limit=10000              max rows to import
 //   --dry-run                  print what would be imported, write nothing
+//   --contacts-only            only refresh the kbo_contacts email lookup (see below)
+//
+// Every import also refreshes kbo_contacts: the emails of all active companies in Brussels + Walloon
+// Brabant, by postcode + name, so the daily Google Maps search can reach businesses without a website.
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -30,6 +34,7 @@ const args = process.argv.slice(2);
 const dir = args.find((a) => !a.startsWith("--"));
 const opt = (name, fallback) => args.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=") ?? fallback;
 const dryRun = args.includes("--dry-run");
+const contactsOnly = args.includes("--contacts-only");
 const sinceDays = Number(opt("since-days", "365"));
 const limit = Number(opt("limit", "10000"));
 const keywords = opt("keywords", DEFAULT_KEYWORDS.join(",")).split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
@@ -83,6 +88,67 @@ const parseDate = (d) => {
 };
 const zipAllowed = (zip) => zipRanges.some(([a, b]) => Number(zip) >= a && Number(zip) <= b);
 const nace = (code) => code.replace(/\./g, "");
+
+/* ── Email lookup for Google Maps businesses (table kbo_contacts) ── */
+// Must give the same key as kboNameKey() in lib/daily-outreach.ts
+const LEGAL_FORMS = /\b(srl|sprl|sa|sc|scs|snc|scrl|asbl|bv|nv|vzw|bvba|comm\.?\s?v)\b\.?/gi;
+const nameKey = (name) =>
+  name.replace(LEGAL_FORMS, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+async function importContactLookup() {
+  const inArea = (zip) => Number(zip) >= 1000 && Number(zip) <= 1499;
+  const companies = new Set(); // active legal persons
+  await eachRow("enterprise.csv", (r) => {
+    if (r.Status === "AC" && r.TypeOfEnterprise === "2") companies.add(r.EnterpriseNumber);
+  });
+  const estOwner = new Map();
+  await eachRow("establishment.csv", (r) => {
+    if (companies.has(r.EnterpriseNumber)) estOwner.set(r.EstablishmentNumber, r.EnterpriseNumber);
+  });
+  const ownerOf = (entity) => (companies.has(entity) ? entity : estOwner.get(entity));
+  const emailOf = new Map(); // company → email (its own, or one of its establishments')
+  await eachRow("contact.csv", (r) => {
+    const company = ownerOf(r.EntityNumber);
+    if (company && r.ContactType === "EMAIL" && (!emailOf.has(company) || r.EntityNumber === company))
+      emailOf.set(company, r.Value.trim().toLowerCase());
+  });
+  const postcodesOf = new Map(); // company → postcodes of its seat and establishments in the area
+  await eachRow("address.csv", (r) => {
+    const company = ownerOf(r.EntityNumber);
+    if (!company || !emailOf.has(company) || r.DateStrikingOff || r.CountryFR || r.CountryNL || !inArea(r.Zipcode)) return;
+    if (!postcodesOf.has(company)) postcodesOf.set(company, new Set());
+    postcodesOf.get(company).add(r.Zipcode);
+  });
+  const lookup = new Map(); // "postcode|key" → row, null when two companies share it
+  await eachRow("denomination.csv", (r) => {
+    const company = ownerOf(r.EntityNumber);
+    const postcodes = company && postcodesOf.get(company);
+    const key = postcodes && nameKey(r.Denomination);
+    if (!key || key.length < 4) return;
+    for (const postcode of postcodes) {
+      const id = `${postcode}|${key}`;
+      const prev = lookup.get(id);
+      if (prev === undefined) lookup.set(id, { postcode, name_key: key, email: emailOf.get(company), kbo_number: company });
+      else if (prev && prev.kbo_number !== company) lookup.set(id, null); // ambiguous name: never guess
+    }
+  });
+  const rows = [...lookup.values()].filter(Boolean);
+  console.log(`• kbo_contacts: ${rows.length} company names with an email in 1000-1499`);
+  if (dryRun) return;
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const { error: clearError } = await supabase.from("kbo_contacts").delete().neq("postcode", "");
+  if (clearError) throw new Error(`kbo_contacts: ${clearError.message}`);
+  for (let i = 0; i < rows.length; i += 1000) {
+    const { error } = await supabase.from("kbo_contacts").insert(rows.slice(i, i + 1000));
+    if (error) throw new Error(`kbo_contacts: ${error.message}`);
+  }
+  console.log(`✓ kbo_contacts refreshed`);
+}
+
+if (contactsOnly) {
+  await importContactLookup();
+  process.exit(0);
+}
 
 /* ── 1. Active enterprises started recently ── */
 const sinceIso = new Date(Date.now() - sinceDays * 86400000).toISOString().slice(0, 10);
@@ -194,6 +260,7 @@ if (dryRun) {
   console.table(rows.slice(0, 20).map((r) => ({ start: r.company_start_date, name: r.name, type: r.source === "kbo_person" ? "nom propre" : "nom commercial", activity: r.category.slice(0, 45), address: r.address, email: r.email ?? "" })));
   const withEmail = rows.filter((r) => r.email).length;
   console.log(`\n${withEmail}/${rows.length} have an email, ${rows.filter((r) => r.website_url).length} a website, ${rows.filter((r) => r.source === "kbo_person").length} are sole traders under their own name.`);
+  await importContactLookup();
   console.log("\nDry run — nothing written. Remove --dry-run to import.");
   process.exit(0);
 }
@@ -213,3 +280,5 @@ for (let i = 0; i < rows.length; i += 50) {
   }
 }
 console.log(`✓ ${imported} imported${skipped ? `, ${skipped} skipped (already in the list)` : ""}`);
+
+await importContactLookup();
