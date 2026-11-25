@@ -15,7 +15,6 @@ import {
   type FollowUpOverrides,
 } from "@/lib/email-html-template";
 import { checkEmail, htmlToText, OPT_OUT_TEXT } from "@/lib/email-checks";
-import { SENDER } from "@/lib/prospect";
 import { plainEmailToHtml } from "@/lib/outreach";
 
 const BUSINESS_EMAIL_FIELDS =

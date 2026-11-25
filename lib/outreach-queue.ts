@@ -7,7 +7,6 @@ import { checkEmail, OPT_OUT_TEXT, type EmailCheckResult } from "./email-checks"
 import { reviewOutreachEmail, correctOutreachEmail, type EmailReview } from "./ai-customize";
 import { sendEmail } from "./resend";
 import { plainEmailToHtml } from "./outreach";
-import { SENDER } from "./prospect";
 
 export type QueueStatus = "pending" | "approved" | "sent" | "rejected" | "failed";
 
