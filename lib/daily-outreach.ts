@@ -70,11 +70,11 @@ export const GOOGLE_ROTATION_TRADES = [
 ];
 
 /**
- * Sectors never emailed (first contact or follow-up): health professions are booked through
+ * Sectors never emailed (first contact or follow-up): health professions (pharmacies excepted) are booked through
  * Doctoranytime & co or their practice, hairdressers rarely have the budget.
  */
 const EXCLUDED_SECTORS =
-  /kin[ée]s|physio|ost[ée]o|dentist|dentaire|pharmac|m[ée]decin|doctor|infirmi|logop|psycho|coiffure|coiffeu|barbier|barber|hair/i;
+  /kin[ée]s|physio|ost[ée]o|dentist|dentaire|m[ée]decin|doctor|infirmi|logop|psycho|coiffure|coiffeu|barbier|barber|hair/i;
 
 export function isExcludedSector(category: string | null): boolean {
   return EXCLUDED_SECTORS.test(category || "");
