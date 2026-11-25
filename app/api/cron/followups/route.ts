@@ -10,7 +10,7 @@ import {
   type FollowUpSettings,
 } from "@/lib/outreach";
 import { queueEmail, queuedBusinessIds, autoCorrectAndSend } from "@/lib/outreach-queue";
-import { DEFAULT_DAILY_SETTINGS, type DailyOutreachSettings } from "@/lib/daily-outreach";
+import { DEFAULT_DAILY_SETTINGS, isFrenchSpeakingArea, type DailyOutreachSettings } from "@/lib/daily-outreach";
 import { getResendClient } from "@/lib/resend";
 
 export const maxDuration = 300;
@@ -79,6 +79,9 @@ export async function GET(request: NextRequest) {
     if (results.filter((r) => r.status === "sent").length >= MAX_PER_RUN) break;
     const business = businessById.get(businessId);
     if (!business || business.replied || business.do_not_contact) continue;
+    // First emails sent before today's filters: no follow-up in French outside the French-speaking area,
+    // nor to a sole trader (no prior consent)
+    if (!isFrenchSpeakingArea(business.address) || business.source === "kbo_person") continue;
     if (alreadyFollowed.has(businessId) || queuedFollowups.has(businessId) || optedOut.has(first.recipient_email)) continue;
     // The first email bounced or was reported as spam: never write to this address again
     if (first.resend_id) {
