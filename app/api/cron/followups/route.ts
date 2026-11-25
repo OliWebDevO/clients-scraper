@@ -15,6 +15,7 @@ import {
   canReceiveMail,
   isAreaMunicipality,
   isBusinessAddress,
+  isExcludedSector,
   isFrenchSpeakingArea,
   type DailyOutreachSettings,
 } from "@/lib/daily-outreach";
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
 
   const [{ data: followed }, { data: businesses }, { data: optOuts }] = await Promise.all([
     supabase.from("sent_emails").select("business_id").eq("kind", "followup").in("business_id", ids),
-    supabase.from("businesses").select("id, name, address, source, replied, do_not_contact, email, legal_person, rating").in("id", ids),
+    supabase.from("businesses").select("id, name, address, source, replied, do_not_contact, email, legal_person, rating, category, website_url").in("id", ids),
     supabase.from("email_optouts").select("email").in("email", [...latestByBusiness.values()].map((e) => e.recipient_email.trim().toLowerCase())),
   ]);
   const alreadyFollowed = new Set((followed || []).map((f) => f.business_id));
@@ -105,6 +106,7 @@ export async function GET(request: NextRequest) {
       businessName: business.name,
       address: business.address,
       source: business.source,
+      websiteUrl: business.website_url,
       originalSubject: first.subject,
       originalBody: first.body && !MARKER.test(first.body) ? first.body : null,
       originalSentAt: first.sent_at,
@@ -159,12 +161,13 @@ export async function GET(request: NextRequest) {
 
 /** The first-contact rules, applied again before the follow-up */
 function followUpAllowed(
-  business: { name: string; address: string | null; source: string | null; email: string | null; legal_person: boolean | null; rating: number | null },
+  business: { name: string; address: string | null; source: string | null; email: string | null; legal_person: boolean | null; rating: number | null; category: string | null },
   recipient: string
 ): boolean {
   // The address was corrected or removed since (e.g. a test sent to Oliver's own address)
   if ((business.email || "").trim().toLowerCase() !== recipient) return false;
   if (!isFrenchSpeakingArea(business.address) || !isBusinessAddress(recipient, business.name)) return false;
+  if (isExcludedSector(business.category)) return false;
   // KBO: companies only (a sole trader hasn't consented), seated in a Brussels / Walloon Brabant municipality
   if (business.source === "kbo") return business.legal_person === true && isAreaMunicipality(business.address);
   if (business.source === "google_maps") return business.rating != null;

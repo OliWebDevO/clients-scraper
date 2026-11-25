@@ -69,6 +69,17 @@ export const GOOGLE_ROTATION_TRADES = [
   "menuisier", "entreprise de rénovation", "carreleur", "peintre en bâtiment", "serrurier", "garage automobile",
 ];
 
+/**
+ * Sectors never emailed (first contact or follow-up): health professions are booked through
+ * Doctoranytime & co or their practice, hairdressers rarely have the budget.
+ */
+const EXCLUDED_SECTORS =
+  /kin[ée]s|physio|ost[ée]o|dentist|dentaire|pharmac|m[ée]decin|doctor|infirmi|logop|psycho|coiffure|coiffeu|barbier|barber|hair/i;
+
+export function isExcludedSector(category: string | null): boolean {
+  return EXCLUDED_SECTORS.test(category || "");
+}
+
 /** Search n of the rotation: each trade in turn, then the next municipality */
 export function googleRotationSearch(index: number): { category: string; location: string } {
   const trades = GOOGLE_ROTATION_TRADES.length;
@@ -273,7 +284,7 @@ export async function selectKboCandidates(
     .limit(500);
   const { contacted, optedOut } = await excludedIds(supabase);
   const pool = ((data || []) as Candidate[])
-    .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()))
+    .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()) && !isExcludedSector(b.category))
     .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address) && isAreaMunicipality(b.address));
 
   // A KBO company that already has a website: never criticise it without evidence.
@@ -351,7 +362,7 @@ export async function selectGoogleCandidates(
   const replyRate = await sectorReplyRates(supabase);
 
   const pool = ((data || []) as Candidate[])
-    .filter((b) => !contacted.has(b.id) && isFrenchSpeakingArea(b.address))
+    .filter((b) => !contacted.has(b.id) && isFrenchSpeakingArea(b.address) && !isExcludedSector(b.category))
     .filter((b) => {
       const profile = getWebsiteProfile({ hasWebsite: b.has_website, websiteUrl: b.website_url, websiteScore: b.website_score });
       return profile !== "ok"; // no site, social/booking page only, or outdated site

@@ -2,7 +2,7 @@
  * Shared pieces of outreach sending (send API + automatic follow-ups).
  */
 import { OPT_OUT_TEXT } from "./email-checks";
-import { cleanBusinessName, getCity, signature } from "./prospect";
+import { cleanBusinessName, getCity, getPlatform, signature } from "./prospect";
 
 export interface FollowUpSettings {
   enabled: boolean;
@@ -46,6 +46,7 @@ export function generateFollowUpEmail(input: {
   businessName: string;
   address: string | null;
   source: string | null;
+  websiteUrl: string | null;
   originalSubject: string;
   originalBody: string | null; // null when the first email was the designed HTML template
   originalSentAt: string;
@@ -58,9 +59,13 @@ export function generateFollowUpEmail(input: {
     timeZone: "Europe/Brussels",
   });
 
+  // They already have a site: talk about it, never "a site for X" ("we already have one")
+  const domain = getPlatform(input.websiteUrl) ? null : input.websiteUrl?.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/.*$/, "");
+  const topic = domain ? `à propos de votre site ${domain}` : `à propos d'un site pour ${name}`;
+
   const parts = [
     "Bonjour,",
-    `Je me permets de revenir vers vous au sujet de mon message du ${sentOn}, à propos d'un site pour ${name}.`,
+    `Je me permets de revenir vers vous au sujet de mon message du ${sentOn}, ${topic}.`,
     `Je sais que vos journées sont bien remplies : si le sujet vous intéresse, 10 minutes au téléphone suffisent pour voir ensemble ce qui vous serait vraiment utile. Sinon, un simple « non merci » me suffit et je ne vous relancerai plus.`,
     `Bien cordialement,\n${signature()}`,
   ];
