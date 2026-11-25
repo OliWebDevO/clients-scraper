@@ -283,6 +283,12 @@ export async function sendQueued(supabase: SupabaseClient, row: QueueRow): Promi
       kind: row.kind,
       resend_id: sent?.id || null,
     });
+    if (row.kind === "followup") {
+      // First email + follow-up = done: the address is never emailed again, whatever later scrapes bring
+      await supabase
+        .from("email_optouts")
+        .upsert({ email: recipient, reason: `Relance envoyée (${now.slice(0, 10)})` }, { onConflict: "email", ignoreDuplicates: true });
+    }
     await supabase
       .from("outreach_queue")
       .update({ status: "sent", sent_at: now, resend_id: sent?.id || null, error_message: null, updated_at: now })
