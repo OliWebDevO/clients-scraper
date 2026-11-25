@@ -10,7 +10,14 @@ import {
   type FollowUpSettings,
 } from "@/lib/outreach";
 import { queueEmail, queuedBusinessIds, autoCorrectAndSend } from "@/lib/outreach-queue";
-import { DEFAULT_DAILY_SETTINGS, isFrenchSpeakingArea, type DailyOutreachSettings } from "@/lib/daily-outreach";
+import {
+  DEFAULT_DAILY_SETTINGS,
+  canReceiveMail,
+  isAreaMunicipality,
+  isBusinessAddress,
+  isFrenchSpeakingArea,
+  type DailyOutreachSettings,
+} from "@/lib/daily-outreach";
 import { getResendClient } from "@/lib/resend";
 
 export const maxDuration = 300;
@@ -67,8 +74,8 @@ export async function GET(request: NextRequest) {
 
   const [{ data: followed }, { data: businesses }, { data: optOuts }] = await Promise.all([
     supabase.from("sent_emails").select("business_id").eq("kind", "followup").in("business_id", ids),
-    supabase.from("businesses").select("id, name, address, source, replied, do_not_contact").in("id", ids),
-    supabase.from("email_optouts").select("email").in("email", [...latestByBusiness.values()].map((e) => e.recipient_email)),
+    supabase.from("businesses").select("id, name, address, source, replied, do_not_contact, email, legal_person, rating").in("id", ids),
+    supabase.from("email_optouts").select("email").in("email", [...latestByBusiness.values()].map((e) => e.recipient_email.trim().toLowerCase())),
   ]);
   const alreadyFollowed = new Set((followed || []).map((f) => f.business_id));
   const optedOut = new Set((optOuts || []).map((o) => o.email));
@@ -79,10 +86,12 @@ export async function GET(request: NextRequest) {
     if (results.filter((r) => r.status === "sent").length >= MAX_PER_RUN) break;
     const business = businessById.get(businessId);
     if (!business || business.replied || business.do_not_contact) continue;
-    // First emails sent before today's filters: no follow-up in French outside the French-speaking area,
-    // nor to a sole trader (no prior consent)
-    if (!isFrenchSpeakingArea(business.address) || business.source === "kbo_person") continue;
-    if (alreadyFollowed.has(businessId) || queuedFollowups.has(businessId) || optedOut.has(first.recipient_email)) continue;
+    const recipient = first.recipient_email.trim().toLowerCase();
+    if (alreadyFollowed.has(businessId) || queuedFollowups.has(businessId) || optedOut.has(recipient)) continue;
+    // Same rules as the first contact (selectKboCandidates / selectGoogleCandidates): some first emails were
+    // sent before those filters existed, or by hand
+    if (!followUpAllowed(business, recipient)) continue;
+    if (!(await canReceiveMail(recipient))) continue;
     // The first email bounced or was reported as spam: never write to this address again
     if (first.resend_id) {
       const { data: delivery } = await getResendClient().emails.get(first.resend_id);
@@ -146,4 +155,18 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true, sent: results.filter((r) => r.status === "sent").length, results });
+}
+
+/** The first-contact rules, applied again before the follow-up */
+function followUpAllowed(
+  business: { name: string; address: string | null; source: string | null; email: string | null; legal_person: boolean | null; rating: number | null },
+  recipient: string
+): boolean {
+  // The address was corrected or removed since (e.g. a test sent to Oliver's own address)
+  if ((business.email || "").trim().toLowerCase() !== recipient) return false;
+  if (!isFrenchSpeakingArea(business.address) || !isBusinessAddress(recipient, business.name)) return false;
+  // KBO: companies only (a sole trader hasn't consented), seated in a Brussels / Walloon Brabant municipality
+  if (business.source === "kbo") return business.legal_person === true && isAreaMunicipality(business.address);
+  if (business.source === "google_maps") return business.rating != null;
+  return false; // kbo_person (sole traders) or unknown source
 }
