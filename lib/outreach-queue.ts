@@ -240,6 +240,13 @@ export async function queuedBusinessIds(supabase: SupabaseClient, kind?: "first"
   return new Set((data || []).map((r) => r.business_id as string));
 }
 
+/** Already received an email from us (any business row): no new first contact, only its own follow-up */
+export async function alreadyEmailed(supabase: SupabaseClient, recipient: string): Promise<boolean> {
+  const pattern = recipient.replace(/[\\%_]/g, "\\$&"); // exact, case-insensitive match
+  const { count } = await supabase.from("sent_emails").select("id", { count: "exact", head: true }).ilike("recipient_email", pattern);
+  return (count ?? 0) > 0;
+}
+
 /** Send one approved email, re-checking opt-outs at send time */
 export async function sendQueued(supabase: SupabaseClient, row: QueueRow): Promise<"sent" | "rejected" | "failed"> {
   const recipient = row.recipient_email.trim().toLowerCase();
@@ -249,10 +256,11 @@ export async function sendQueued(supabase: SupabaseClient, row: QueueRow): Promi
       ? supabase.from("businesses").select("name, do_not_contact, replied").eq("id", row.business_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  if (optOut || business?.do_not_contact || (row.kind === "followup" && business?.replied)) {
+  const repeat = row.kind !== "followup" && (await alreadyEmailed(supabase, recipient));
+  if (optOut || repeat || business?.do_not_contact || (row.kind === "followup" && business?.replied)) {
     await supabase
       .from("outreach_queue")
-      .update({ status: "rejected", error_message: "Désinscrit, « ne plus contacter » ou a répondu entre-temps", updated_at: new Date().toISOString() })
+      .update({ status: "rejected", error_message: "Désinscrit, déjà contacté, « ne plus contacter » ou a répondu entre-temps", updated_at: new Date().toISOString() })
       .eq("id", row.id);
     return "rejected";
   }

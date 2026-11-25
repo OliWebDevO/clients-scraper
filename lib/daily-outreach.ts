@@ -224,13 +224,17 @@ export function brusselsDate(date = new Date()): { day: string; hour: number } {
 /** Never contacted (nor already waiting in the review queue), not opted out */
 async function excludedIds(supabase: SupabaseClient): Promise<{ contacted: Set<string>; optedOut: Set<string> }> {
   const [{ data: sent }, { data: optOuts }, queued] = await Promise.all([
-    supabase.from("sent_emails").select("business_id").not("business_id", "is", null).limit(10000),
+    supabase.from("sent_emails").select("business_id, recipient_email").limit(10000),
     supabase.from("email_optouts").select("email").limit(10000),
     queuedBusinessIds(supabase),
   ]);
   return {
-    contacted: new Set([...(sent || []).map((s) => s.business_id as string), ...queued]),
-    optedOut: new Set((optOuts || []).map((o) => o.email as string)),
+    contacted: new Set([...(sent || []).map((s) => s.business_id as string).filter(Boolean), ...queued]),
+    // Opted out, or already emailed once (maybe under another business row from an earlier scrape)
+    optedOut: new Set([
+      ...(optOuts || []).map((o) => o.email as string),
+      ...(sent || []).map((s) => (s.recipient_email as string).trim().toLowerCase()),
+    ]),
   };
 }
 
@@ -284,7 +288,7 @@ export async function selectKboCandidates(
     .limit(500);
   const { contacted, optedOut } = await excludedIds(supabase);
   const pool = ((data || []) as Candidate[])
-    .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.toLowerCase()) && !isExcludedSector(b.category))
+    .filter((b) => !contacted.has(b.id) && !optedOut.has(b.email!.trim().toLowerCase()) && !isExcludedSector(b.category))
     .filter((b) => isBusinessAddress(b.email!, b.name) && isFrenchSpeakingArea(b.address) && isAreaMunicipality(b.address));
 
   // A KBO company that already has a website: never criticise it without evidence.
@@ -362,7 +366,7 @@ export async function selectGoogleCandidates(
   const replyRate = await sectorReplyRates(supabase);
 
   const pool = ((data || []) as Candidate[])
-    .filter((b) => !contacted.has(b.id) && isFrenchSpeakingArea(b.address) && !isExcludedSector(b.category))
+    .filter((b) => !contacted.has(b.id) && !optedOut.has((b.email || "").trim().toLowerCase()) && isFrenchSpeakingArea(b.address) && !isExcludedSector(b.category))
     .filter((b) => {
       const profile = getWebsiteProfile({ hasWebsite: b.has_website, websiteUrl: b.website_url, websiteScore: b.website_score });
       return profile !== "ok"; // no site, social/booking page only, or outdated site
@@ -387,7 +391,7 @@ export async function selectGoogleCandidates(
       if (!(await freshAnalysis(supabase, b))) continue; // unreachable or Dutch only
       if (b.website_url && (b.website_score ?? 0) < GOOD_WEBSITE_SCORE) continue; // improved since the scrape: nothing to suggest
     }
-    if (!b.email || optedOut.has(b.email.toLowerCase())) continue;
+    if (!b.email || optedOut.has(b.email.trim().toLowerCase())) continue;
     if (!isBusinessAddress(b.email, b.name)) continue; // impersonal business address only
     if (!(await canReceiveMail(b.email!))) continue;
     picked.push(b);

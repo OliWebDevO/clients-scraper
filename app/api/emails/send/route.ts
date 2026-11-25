@@ -16,6 +16,7 @@ import {
 } from "@/lib/email-html-template";
 import { checkEmail, htmlToText, OPT_OUT_TEXT } from "@/lib/email-checks";
 import { plainEmailToHtml } from "@/lib/outreach";
+import { alreadyEmailed } from "@/lib/outreach-queue";
 
 const BUSINESS_EMAIL_FIELDS =
   "name, rating, review_count, category, address, has_website, website_url, website_score, website_issues, email, do_not_contact, source, company_start_date";
@@ -89,6 +90,12 @@ export async function POST(request: NextRequest) {
     if (optOut) {
       return NextResponse.json(
         { success: false, error: "Cette adresse a demandé à ne plus être contactée." },
+        { status: 409 }
+      );
+    }
+    if (await alreadyEmailed(supabase, recipient)) {
+      return NextResponse.json(
+        { success: false, error: "Cette adresse a déjà reçu un mail : pas de nouveau premier contact." },
         { status: 409 }
       );
     }
