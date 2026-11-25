@@ -173,7 +173,6 @@ export async function POST(request: NextRequest) {
       subject,
       html,
       text,
-      headers: { "List-Unsubscribe": `<mailto:${SENDER.email}?subject=stop>` },
     });
 
     // Remember the address on the business (used for opt-outs and to pre-fill next time)

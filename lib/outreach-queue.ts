@@ -273,7 +273,6 @@ export async function sendQueued(supabase: SupabaseClient, row: QueueRow): Promi
       subject: row.subject,
       html: plainEmailToHtml(row.body),
       text: `${row.body}\n\n—\n${OPT_OUT_TEXT}`, // same opt-out line as the HTML version
-      headers: { "List-Unsubscribe": `<mailto:${SENDER.email}?subject=stop>` },
     });
     const now = new Date().toISOString();
     await supabase.from("sent_emails").insert({
