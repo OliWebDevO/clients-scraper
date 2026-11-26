@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   LogOut,
   MailCheck,
+  Inbox,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const navigation = [
   { name: "Jobs", href: "/jobs", icon: Briefcase },
   { name: "Emails", href: "/emails", icon: Mail },
   { name: "À valider", href: "/queue", icon: MailCheck },
+  { name: "Réponses", href: "/replies", icon: Inbox },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
