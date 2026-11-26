@@ -231,6 +231,7 @@ export function cleanBusinessName(name: string, city?: string | null): string {
     .split(" | ")[0]
     .split(" / ")[0] // "Vereecke / Christophe Boulangerie Pâtisserie Bakkerij Banket" → "Vereecke"
     .replace(/[\s,]+\(?(srl|sprl|sa|sc|scrl|snc|scs|asbl|bv|bvba|nv|cv|vof|vzw|comm\.?\s?v)\.?\)?$/i, "")
+    .replace(/^(srl|sprl|scrl|asbl|bvba|vzw)\.?\s+(?=\S)/i, "") // "Sprl Vendredi" → "Vendredi" (short forms like "SA" may be part of the name)
     .trim();
   const dash = cleaned.match(/^(.+?)\s+[-–—]\s+(.+)$/);
   if (dash) {
