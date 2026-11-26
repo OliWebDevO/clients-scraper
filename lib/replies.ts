@@ -9,14 +9,22 @@ const AUTO_SUBJECT =
   /absen|out of office|automatic reply|auto(matic)?[- ]?reply|réponse automatique|reponse automatique|automatisch antwoord|afwezig|accusé de réception|accuse de reception|abwesenheit/i;
 // Where the quoted earlier message starts: everything from there on is cut
 const QUOTE_START =
-  /^(>|le .+ a écrit\s*:|on .+ wrote\s*:|op .+ schreef\s*:|-{2,}\s*(original message|message d'origine|message du)|de\s*:\s|from\s*:\s|envoyé\s*:|sent\s*:)/i;
+  /^(>|le .+ a écrit\s*:|on .+ wrote\s*:|op .+ schreef\s*:|-{2,}\s*(original message|message d'origine|message du)|de\s*:\s|from\s*:\s|envoyé\s*:|sent\s*:|_{10,})/i;
+// "Le mer. 25 nov. 2026 à 16:07, Oliver … a écrit :" wrapped over two lines: the date line alone starts the quote
+const QUOTE_DATE_LINE = /^(le|on|op|am)\s.*\d{4}.*\d{1,2}[:h.]\d{2}/i;
+// Unsubscribe request (Apple Mail "stop", "désinscrire"…): the address goes on the opt-out list
+const UNSUBSCRIBE = /^\s*(stop|unsubscribe|désinscri|desinscri|se désabonner|afmelden|uitschrijven)/i;
 
 type SyncState = { uid_validity: string; last_uid: number; checked_at?: string; last_error?: string };
 
 /** The prospect's own words, without the quoted thread below */
 function replyText(text: string): string {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  const cut = lines.findIndex((line) => QUOTE_START.test(line.trim()));
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    // "…AuroreLe 25 novembre 2026 à 13:08, Oliver … a écrit :" glued to the signature (HTML-only mails)
+    .replace(/(Le|On|Op)\s[^\n]{5,200}?(a écrit|wrote|schreef)\s*:[\s\S]*$/, "")
+    .split("\n");
+  const cut = lines.findIndex((line) => QUOTE_START.test(line.trim()) || QUOTE_DATE_LINE.test(line.trim()));
   return (cut === -1 ? lines : lines.slice(0, cut)).join("\n").trim().slice(0, 20000);
 }
 
@@ -109,7 +117,14 @@ export async function syncReplies(supabase: SupabaseClient): Promise<{ checked: 
         const businessId = await matchBusiness(supabase, from);
         if (!businessId) continue; // not a prospect: the rest of the inbox is none of the app's business
 
-        const autoReply = isAutoReply(mail);
+        const unsubscribe = UNSUBSCRIBE.test(mail.subject ?? "") || UNSUBSCRIBE.test(replyText(mail.text || ""));
+        if (unsubscribe) {
+          await supabase
+            .from("email_optouts")
+            .upsert({ email: from, reason: `Désinscription par mail (${new Date().toISOString().slice(0, 10)})` }, { onConflict: "email" });
+          await supabase.from("businesses").update({ do_not_contact: true }).eq("id", businessId);
+        }
+        const autoReply = !unsubscribe && isAutoReply(mail);
         const { error } = await supabase.from("prospect_replies").upsert(
           {
             message_id: mail.messageId || `uid-${uidValidity}-${message.uid}`,
@@ -120,7 +135,7 @@ export async function syncReplies(supabase: SupabaseClient): Promise<{ checked: 
             body: replyText(mail.text || ""),
             received_at: (mail.date ?? new Date()).toISOString(),
             auto_reply: autoReply,
-            status: autoReply ? "handled" : "new",
+            status: autoReply || unsubscribe ? "handled" : "new",
           },
           { onConflict: "message_id", ignoreDuplicates: true }
         );
