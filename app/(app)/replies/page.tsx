@@ -92,8 +92,8 @@ export default function RepliesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Réponses</h1>
           <p className="mt-1 text-muted-foreground">
-            Réponses des prospects, lues chaque heure dans la boîte {SENDER.email}. Une réponse arrête les relances vers cette
-            entreprise.
+            Réponses des prospects, lues chaque matin à 7h dans la boîte {SENDER.email}, avant les envois. Une réponse arrête
+            les relances vers cette entreprise.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -115,7 +115,7 @@ export default function RepliesPage() {
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Chargement" />
       ) : open.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
-          Aucune nouvelle réponse. Elles apparaissent ici au plus tard une heure après leur arrivée.
+          Aucune nouvelle réponse. Celles reçues aujourd&apos;hui apparaîtront demain matin après 7h.
         </p>
       ) : (
         <div className="space-y-4">
