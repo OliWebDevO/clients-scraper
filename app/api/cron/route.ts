@@ -205,18 +205,19 @@ async function saveBusinesses(supabase: SupabaseClient, rows: Record<string, unk
   return saved;
 }
 
-const GOOGLE_CONTACTABLE_PER_DAY = 3; // businesses with an email the daily send can use
 const GOOGLE_MAX_SEARCHES = 15;
 const GOOGLE_MAX_MINUTES = 40;
 
 /**
  * Trade × municipality searches, one after the other, until the day's searches found
- * GOOGLE_CONTACTABLE_PER_DAY new businesses with a usable email (or the search/time budget runs out).
+ * as many new businesses with a usable email as the daily send takes (daily_outreach.google_count) (or the search/time budget runs out).
  * Businesses already in the database are skipped, so their data (emails found later) is never overwritten.
  */
 async function runGoogleRotation(supabase: SupabaseClient, schedule: ScrapeSchedule): Promise<number> {
   const { data: known } = await supabase.from("businesses").select("name, address").eq("source", "google_maps").limit(20000);
   const existing = (known || []) as Array<{ name: string; address: string | null }>;
+  const { data: daily } = await supabase.from("settings").select("value").eq("key", "daily_outreach").maybeSingle();
+  const GOOGLE_CONTACTABLE_PER_DAY = Number((daily?.value as { google_count?: number } | undefined)?.google_count) || 3;
   const deadline = Date.now() + GOOGLE_MAX_MINUTES * 60000;
   let index = schedule.config.rotation_index ?? 0;
   let saved = 0;

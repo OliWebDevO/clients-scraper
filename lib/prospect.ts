@@ -268,11 +268,13 @@ export function withArticle(name: string, preposition?: "de"): string {
   return /^[aeiouéèêàâîôû]/i.test(name) ? `d'${name}` : `de ${name}`;
 }
 
-/** Started within the last 12 months */
-export function isRecentlyStarted(startDate: string | null | undefined): boolean {
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Started within the last `months` months ("lancement" only rings true for the first 6) */
+export function isRecentlyStarted(startDate: string | null | undefined, months = 6): boolean {
   if (!startDate) return false;
   const started = new Date(startDate).getTime();
-  return !Number.isNaN(started) && Date.now() - started < 365 * 86400000;
+  return !Number.isNaN(started) && Date.now() - started < months * 30.5 * 86400000;
 }
 
 /* ── First-contact email (short, plain text) ── */
@@ -317,10 +319,15 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
 
   // 1. Hook: about them, with facts
   let hook: string;
+  // Under 6 months: congratulations on the launch. 6 to 12 months: the launch is a fact, no longer news.
+  const justLaunched = fromKbo && isRecentlyStarted(data.companyStartDate);
+  const launchedThisYear = fromKbo && !justLaunched && isRecentlyStarted(data.companyStartDate, 12);
   if (fromKbo) {
-    hook = isRecentlyStarted(data.companyStartDate)
+    hook = justLaunched
       ? `Félicitations pour le lancement ${isPerson ? "de votre activité" : withArticle(name, "de")}${city ? ` à ${city}` : ""} !`
-      : `J'ai découvert ${isPerson ? "votre activité" : withArticle(name)}${city ? ` à ${city}` : ""} dans le registre des entreprises.`;
+      : launchedThisYear
+        ? `${isPerson ? "Votre activité" : capitalize(withArticle(name))} a vu le jour${city ? ` à ${city}` : ""} en ${new Date(data.companyStartDate!).toLocaleDateString("fr-BE", { month: "long", timeZone: "Europe/Brussels" })} dernier.`
+        : `J'ai découvert ${isPerson ? "votre activité" : withArticle(name)}${city ? ` à ${city}` : ""} dans le registre des entreprises.`;
   } else if (strongReputation) {
     hook = `Avec ${data.reviewCount} avis à ${stars}/5 sur Google, ${name} jouit déjà d'une très belle réputation.`;
   } else if (goodRating) {
@@ -369,7 +376,11 @@ export function generateFirstContactEmail(data: ProspectData): { subject: string
       break;
     }
     default:
-      if (fromKbo) {
+      if (fromKbo && !justLaunched) {
+        gap = `Après ces premiers mois, un site à votre nom vous rendrait visible sur Google auprès de ceux qui cherchent vos services, avec une présence professionnelle qui inspire confiance.`;
+        cost = "";
+        subject = isPerson ? "Un site pour votre activité ?" : `Et si ${withArticle(name)} avait son site ?`;
+      } else if (fromKbo) {
         gap = `C'est le meilleur moment pour avoir un site : vos premiers clients vont vous chercher sur Google, et une présence professionnelle dès le départ fait toute la différence.`;
         cost = "";
         subject = isPerson
